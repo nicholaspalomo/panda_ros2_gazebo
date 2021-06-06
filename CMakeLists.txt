@@ -64,7 +64,13 @@ find_package(trajectory_msgs REQUIRED)
 # )
 
 # Install directories
-install(DIRECTORY launch description config rviz DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY
+        launch 
+        description 
+        config 
+        rviz 
+    DESTINATION 
+        share/${PROJECT_NAME}/)
 
 # Setup the project
 ament_package()

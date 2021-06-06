@@ -1,93 +1,79 @@
-# Copyright 2021 Open Source Robotics Foundation, Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-import os
-
 from ament_index_python.packages import get_package_share_directory
-from launch import LaunchDescription
+import launch
+from launch.substitutions import Command, LaunchConfiguration
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch_ros.actions import Node
-import xacro
+import launch_ros
+import os
 
 
 def generate_launch_description():
-    gazebo = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            [
-                os.path.join(get_package_share_directory("gazebo_ros"), "launch"),
-                "/gazebo.launch.py",
-            ]
-        ),
-        launch_arguments={"verbose": "true"}.items(),
-    )
-
-    robot_description_path = os.path.join(
-        get_package_share_directory("panda_ros2_gazebo"),
+    pkg_share = launch_ros.substitutions.FindPackageShare(package='panda_ros2_gazebo').find('panda_ros2_gazebo')
+    default_model_path = os.path.join(pkg_share,
         "description",
         "models",
         "panda",
         "panda.urdf",
     )
-    robot_description_config = xacro.parse(open(robot_description_path))
-    xacro.process_doc(robot_description_config)
+    default_rviz_config_path = os.path.join(pkg_share, 'rviz/rviz.rviz')
 
-    robot_description = {"robot_description": robot_description_config.toxml()}
-
-    node_robot_state_publisher = Node(
-        package="robot_state_publisher",
-        executable="robot_state_publisher",
-        output="screen",
-        parameters=[robot_description],
+    gazebo = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+                os.path.join(get_package_share_directory("gazebo_ros"), "launch", "gazebo.launch.py")
+        ),
+        launch_arguments={"verbose": "true"}.items(),
     )
-
-    rviz_config_file = os.path.join(
-        get_package_share_directory("panda_ros2_gazebo"), "rviz", "rviz.rviz"
+    robot_state_publisher_node = launch_ros.actions.Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        parameters=[{'robot_description': Command(['xacro ', LaunchConfiguration('model')])}]
     )
-
-    rviz_node = Node(
-        package="rviz2",
-        executable="rviz2",
-        name="rviz2",
-        output="log",
-        arguments=["-d", rviz_config_file],
+    joint_state_publisher_node = launch_ros.actions.Node(
+        package='joint_state_publisher',
+        executable='joint_state_publisher',
+        name='joint_state_publisher',
+        condition=launch.conditions.UnlessCondition(LaunchConfiguration('gui'))
     )
-
-    spawn_entity = Node(
+    joint_state_publisher_gui_node = launch_ros.actions.Node(
+        package='joint_state_publisher_gui',
+        executable='joint_state_publisher_gui',
+        name='joint_state_publisher_gui',
+        condition=launch.conditions.IfCondition(LaunchConfiguration('gui'))
+    )
+    rviz_node = launch_ros.actions.Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        output='screen',
+        arguments=['-d', LaunchConfiguration('rvizconfig')],
+    )
+    spawn_entity = launch_ros.actions.Node(
         package="gazebo_ros",
         executable="spawn_entity.py",
         arguments=["-topic", "robot_description", "-entity", "panda"],
         output="screen",
     )
-
     effort_controller_config = os.path.join(
         get_package_share_directory("panda_ros2_gazebo"), "config", "ros_control.yaml"
     )
-
-    spawn_controller = Node(
+    spawn_controller = launch_ros.actions.Node(
         package="controller_manager",
         executable="spawner.py",
         arguments=["joint_group_effort_controller", "--param-file", effort_controller_config, "-t", "effort_controllers/JointGroupEffortController"],
         output="screen",
     )
 
-    return LaunchDescription(
-        [
-            rviz_node,
-            gazebo,
-            node_robot_state_publisher,
-            spawn_entity,
-            # spawn_controller,
-        ]
-    )
+    return launch.LaunchDescription([
+        launch.actions.DeclareLaunchArgument(name='gui', default_value='True',
+                                             description='Flag to enable joint_state_publisher_gui'),
+        launch.actions.DeclareLaunchArgument(name='model', default_value=default_model_path,
+                                             description='Absolute path to robot urdf file'),
+        launch.actions.DeclareLaunchArgument(name='rvizconfig', default_value=default_rviz_config_path,
+                                             description='Absolute path to rviz config file'),
+        joint_state_publisher_node,
+        joint_state_publisher_gui_node,
+        robot_state_publisher_node,
+        rviz_node,
+        gazebo,
+        spawn_entity
+    ])
