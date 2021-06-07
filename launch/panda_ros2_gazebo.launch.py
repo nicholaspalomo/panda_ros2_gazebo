@@ -61,7 +61,14 @@ def generate_launch_description():
     spawn_controller = launch_ros.actions.Node(
         package="controller_manager",
         executable="spawner.py",
-        arguments=["joint_group_effort_controller", "--param-file", effort_controller_config, "-t", "effort_controllers/JointGroupEffortController"],
+        arguments=["joint_group_effort_controller", "--param-file", effort_controller_config, "--controller-type", "effort_controllers/JointGroupEffortController"],
+        output="screen",
+    )
+
+    spawn_joint_state_broadcaster = launch_ros.actions.Node(
+        package="controller_manager",
+        executable="spawner.py",
+        arguments=["joint_state_broadcaster", "--controller-type", "joint_state_broadcaster/JointStateBroadcaster"],
         output="screen",
     )
 
@@ -76,11 +83,12 @@ def generate_launch_description():
                                              description='Absolute path to robot urdf file'),
         launch.actions.DeclareLaunchArgument(name='rvizconfig', default_value=default_rviz_config_path,
                                              description='Absolute path to rviz config file'),
-        joint_state_publisher_node,
-        # joint_state_publisher_gui_node,
+        spawn_joint_state_broadcaster,
         robot_state_publisher_node,
         rviz_node,
         gazebo,
         spawn_entity,
         spawn_controller
+        # joint_state_publisher_node,
+        # joint_state_publisher_gui_node,
     ])
