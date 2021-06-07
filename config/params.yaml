@@ -1,0 +1,3 @@
+pick_and_place:
+  ros__parameters:
+    model_file: 'description/models/panda/panda.urdf'
