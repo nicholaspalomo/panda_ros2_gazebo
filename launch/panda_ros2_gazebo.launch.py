@@ -8,6 +8,7 @@ import os
 
 
 def generate_launch_description():
+    use_sim_time = LaunchConfiguration('use_sim_time', default='false')
     pkg_share = launch_ros.substitutions.FindPackageShare(package='panda_ros2_gazebo').find('panda_ros2_gazebo')
     default_model_path = os.path.join(pkg_share,
         "description",
@@ -26,7 +27,8 @@ def generate_launch_description():
     robot_state_publisher_node = launch_ros.actions.Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
-        parameters=[{'robot_description': Command(['xacro ', LaunchConfiguration('model')])}]
+        output='both',
+        parameters=[{'use_sim_time': use_sim_time, 'robot_description': Command(['xacro ', LaunchConfiguration('model')])}]
     )
     joint_state_publisher_node = launch_ros.actions.Node(
         package='joint_state_publisher',
@@ -44,7 +46,7 @@ def generate_launch_description():
         package='rviz2',
         executable='rviz2',
         name='rviz2',
-        output='screen',
+        output='log',
         arguments=['-d', LaunchConfiguration('rvizconfig')],
     )
     spawn_entity = launch_ros.actions.Node(
@@ -64,16 +66,21 @@ def generate_launch_description():
     )
 
     return launch.LaunchDescription([
-        launch.actions.DeclareLaunchArgument(name='gui', default_value='True',
+        launch.actions.DeclareLaunchArgument(
+            'use_sim_time',
+            default_value='false',
+            description='Use simulation (Gazebo) clock if true'),
+        launch.actions.DeclareLaunchArgument(name='gui', default_value='false',
                                              description='Flag to enable joint_state_publisher_gui'),
         launch.actions.DeclareLaunchArgument(name='model', default_value=default_model_path,
                                              description='Absolute path to robot urdf file'),
         launch.actions.DeclareLaunchArgument(name='rvizconfig', default_value=default_rviz_config_path,
                                              description='Absolute path to rviz config file'),
         joint_state_publisher_node,
-        joint_state_publisher_gui_node,
+        # joint_state_publisher_gui_node,
         robot_state_publisher_node,
         rviz_node,
         gazebo,
-        spawn_entity
+        spawn_entity,
+        spawn_controller
     ])

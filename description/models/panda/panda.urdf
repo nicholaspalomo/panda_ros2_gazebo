@@ -342,42 +342,137 @@
     <disableFixedJointLumping>true</disableFixedJointLumping>
   </gazebo>
 
+    <gazebo reference="panda_link0">
+      <material>Gazebo/Orange</material>
+    </gazebo>
+
+    <gazebo reference="panda_link1">
+      <material>Gazebo/Orange</material>
+    </gazebo>
+
+    <gazebo reference="panda_link2">
+      <material>Gazebo/Orange</material>
+    </gazebo>
+
+    <gazebo reference="panda_link3">
+      <material>Gazebo/Orange</material>
+    </gazebo>
+
+    <gazebo reference="panda_link4">
+      <material>Gazebo/Orange</material>
+    </gazebo>
+
+    <gazebo reference="panda_link5">
+      <material>Gazebo/Orange</material>
+    </gazebo>
+
+    <gazebo reference="panda_link6">
+      <material>Gazebo/Orange</material>
+    </gazebo>
+
+    <gazebo reference="panda_link7">
+      <material>Gazebo/Orange</material>
+    </gazebo>
+
+    <gazebo reference="panda_link8">
+      <material>Gazebo/Orange</material>
+    </gazebo>
+
+    <gazebo reference="panda_hand">
+      <material>Gazebo/Orange</material>
+    </gazebo>
+
+    <gazebo reference="panda_leftfinger">
+      <material>Gazebo/Orange</material>
+    </gazebo>
+
+    <gazebo reference="panda_rightfinger">
+      <material>Gazebo/Orange</material>
+    </gazebo>
+
   <!-- ros_control plugin -->
-  <!-- <gazebo>
+  <gazebo>
     <plugin name="gazebo_ros2_control" filename="libgazebo_ros2_control.so">
       <parameters>$(find panda_ros2_gazebo)/config/ros_control.yaml</parameters>
     </plugin>
   </gazebo>
 
-  <ros2_control name="${name}" type="system">
-    <xacro:if value="$(arg use_sim)">
+  <ros2_control name="panda" type="system">
       <hardware>
         <plugin>gazebo_ros2_control/GazeboSystem</plugin>
       </hardware>
-    </xacro:if>
-    <xacro:unless value="$(arg use_sim)">
-      <hardware>
-        <plugin>ros2_control_demo_hardware/RRBotSystemPositionOnlyHardware</plugin>
-        <param name="example_param_hw_start_duration_sec">2.0</param>
-        <param name="example_param_hw_stop_duration_sec">3.0</param>
-        <param name="example_param_hw_slowdown">${slowdown}</param>
-      </hardware>
-    </xacro:unless>
 
-    <joint name="joint1">
-      <command_interface name="position">
-        <param name="min">-1</param>
-        <param name="max">1</param>
-      </command_interface>
-      <state_interface name="position"/>
-    </joint>
-    <joint name="joint2">
-      <command_interface name="position">
-        <param name="min">-1</param>
-        <param name="max">1</param>
-      </command_interface>
-      <state_interface name="position"/>
-    </joint>
-  </ros2_control> -->
+      <joint name="panda_joint1">
+        <command_interface name="effort">
+          <param name="min">-500</param>
+          <param name="max">-500</param>
+        </command_interface>
+        <state_interface name="position"/>
+      </joint>
+
+      <joint name="panda_joint2">
+        <command_interface name="effort">
+          <param name="min">-500</param>
+          <param name="max">-500</param>
+        </command_interface>
+        <state_interface name="position"/>
+      </joint>
+
+      <joint name="panda_joint3">
+        <command_interface name="effort">
+          <param name="min">-500</param>
+          <param name="max">-500</param>
+        </command_interface>
+        <state_interface name="position"/>
+      </joint>
+
+      <joint name="panda_joint4">
+        <command_interface name="effort">
+          <param name="min">-500</param>
+          <param name="max">-500</param>
+        </command_interface>
+        <state_interface name="position"/>
+      </joint>
+
+      <joint name="panda_joint5">
+        <command_interface name="effort">
+          <param name="min">-500</param>
+          <param name="max">-500</param>
+        </command_interface>
+        <state_interface name="position"/>
+      </joint>
+
+      <joint name="panda_joint6">
+        <command_interface name="effort">
+          <param name="min">-500</param>
+          <param name="max">-500</param>
+        </command_interface>
+        <state_interface name="position"/>
+      </joint>
+
+      <joint name="panda_joint7">
+        <command_interface name="effort">
+          <param name="min">-500</param>
+          <param name="max">-500</param>
+        </command_interface>
+        <state_interface name="position"/>
+      </joint>
+
+      <joint name="panda_finger_joint1">
+        <command_interface name="effort">
+          <param name="min">-500</param>
+          <param name="max">-500</param>
+        </command_interface>
+        <state_interface name="position"/>
+      </joint>
+
+      <joint name="panda_finger_joint2">
+        <command_interface name="effort">
+          <param name="min">-500</param>
+          <param name="max">-500</param>
+        </command_interface>
+        <state_interface name="position"/>
+      </joint>
+  </ros2_control>
 
 </robot>
