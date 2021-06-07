@@ -77,7 +77,7 @@ def generate_launch_description():
             'use_sim_time',
             default_value='false',
             description='Use simulation (Gazebo) clock if true'),
-        launch.actions.DeclareLaunchArgument(name='gui', default_value='false',
+        launch.actions.DeclareLaunchArgument(name='gui', default_value='true',
                                              description='Flag to enable joint_state_publisher_gui'),
         launch.actions.DeclareLaunchArgument(name='model', default_value=default_model_path,
                                              description='Absolute path to robot urdf file'),
