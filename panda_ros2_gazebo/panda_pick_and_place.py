@@ -11,6 +11,8 @@ from functools import partial
 from models.panda import Panda, FingersAction
 from scenario import core as scenario_core
 
+# TODO: Publish the end effector odometry message. Make sure to update the end effector odometry on every call to the control callback
+
 # Configure numpy output
 np.set_printoptions(precision=4, suppress=True)
 

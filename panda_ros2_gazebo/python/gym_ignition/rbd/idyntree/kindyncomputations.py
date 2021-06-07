@@ -10,8 +10,6 @@ from gym_ignition.rbd import conversions
 from gym_ignition.rbd.idyntree import numpy
 from .helpers import FrameVelocityRepresentation, iDynTreeHelpers
 
-# TODO: Publish the end effector odometry message. Make sure to update the end effector odometry on every call to the control callback
-
 class KinDynComputations:
 
     def __init__(self,

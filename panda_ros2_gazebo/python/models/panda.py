@@ -18,7 +18,7 @@ from gym_ignition.rbd import conversions
 from gym_ignition.rbd.idyntree import inverse_kinematics_nlp, kindyncomputations, helpers
 from scipy.spatial.transform import Rotation as R
 
-from geometry_msgs.msg import Transform, Vector3, Quaternion, PoseWithCovariance, TwistWithCovariance
+from geometry_msgs.msg import Transform, Vector3, Quaternion, PoseWithCovariance, TwistWithCovariance, Pose, Twist
 from sensor_msgs.msg import JointState
 from nav_msgs.msg import Odometry
 from gazebo_msgs.msg import ModelState, SetModelState
@@ -120,13 +120,51 @@ class Panda():
         # self._srv_gazebo_pause = self._node_handle.service_client(Empty, )
         # self._srv_gazebo_pause
 
-    def end_effector_pose(self):
+    def end_effector_pose(self) -> Odometry:
+        """ Returns an end effector odometry message """
 
         # get the end effector pose from the kinematic model
         end_effector_pose_in_base_frame = self._kindyn.get_relative_transform(self.base_frame(), self.end_effector_frame())
 
-        # TODO: populate the end effector odometry message
+        # Get the end effector Jacobian
+        J = self._kindyn.get_frame_jacobian(self.end_effector_frame())
 
+        end_effector_twist = np.matmul(J, self.joint_states.velocity[:, np.newaxis])
+
+        end_effector_pose_msg = PoseWithCovariance()
+        pose = Pose()
+        pose.position.x = end_effector_pose_in_base_frame[0, -1]
+        pose.position.y = end_effector_pose_in_base_frame[1, -1]
+        pose.position.z = end_effector_pose_in_base_frame[2, -1]
+
+        quat = R.from_matrix(end_effector_pose_in_base_frame[:3, :3])
+        quat = R.as_quat()
+        pose.orientation.x = quat[0]
+        pose.orientation.y = quat[1]
+        pose.orientation.z = quat[2]
+        pose.orientation.w = quat[3]
+
+        end_effector_pose_msg.pose = pose
+
+        self._end_effector_odom.pose = end_effector_pose_msg
+
+        end_effector_twist_msg = TwistWithCovariance()
+        twist = Twist()
+        velocity = Vector3()
+        velocity.x = end_effector_twist[0]
+        velocity.y = end_effector_twist[1]
+        velocity.z = end_effector_twist[2]
+        twist.linear = velocity
+        velocity.x = end_effector_twist[0]
+        velocity.y = end_effector_twist[1]
+        velocity.z = end_effector_twist[2]
+        twist.angular = velocity
+
+        end_effector_twist_msg.twist = twist
+
+        self._end_effector_odom.twist = end_effector_twist_msg
+
+        return self._end_effector_odom
 
     def _get_panda_ik(self, optimized_joints: List[str]) -> \
         inverse_kinematics_nlp.InverseKinematicsNLP:
