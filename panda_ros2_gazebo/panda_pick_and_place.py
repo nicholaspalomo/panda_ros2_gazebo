@@ -9,12 +9,7 @@ import gym_ignition
 from typing import List
 from functools import partial
 from models.panda import Panda, FingersAction
-from gym_ignition.rbd import conversions
 from scenario import core as scenario_core
-from scenario import gazebo as scenario_gazebo
-from scipy.spatial.transform import Rotation as R
-from gym_ignition.context.gazebo import controllers
-from gym_ignition.rbd.idyntree import inverse_kinematics_nlp
 
 # Configure numpy output
 np.set_printoptions(precision=4, suppress=True)
@@ -27,18 +22,12 @@ class PandaPickAndPlace(Node):
         self._joint_commands_publisher = self.create_publisher(Float64MultiArray, self._joint_control_topic)
         self._joint_states_subscriber = self.create_subscriber()
         self._end_effector_pose_subscriber = self.create_subscriber()
-        self._control_dt = 0.001 # 1000 Hz
+        self._control_dt = self.get_parameter('control_dt').value
         self._control_callback_timer = self.create_timer(self._control_dt, self.callback_pid)
 
-        self.add_panda_controller(self._control_dt)
+        self._panda = Panda(self.handle)
 
-        self._panda = Panda()
-        self._optimized_joints = self._panda.joint_names()[:-2]
-        self._ik = self.get_panda_ik(self._panda, self._optimized_joints)
-
-        self._num_arm_joints = 7
-        self._num_finger_joints = 2
-        self._num_joints = self._num_arm_joints + self._num_finger_joints
+        self._num_joints = self._panda.num_joints()
         self._err = np.zeros((self._num_joints,))
         self._int_err = np.zeros((self._num_joints,))
         self._joint_targets = np.zeros((self._num_joints,))
@@ -46,11 +35,11 @@ class PandaPickAndPlace(Node):
         self._i_gains = np.zeros((self._num_joints,))
         self._d_gains = np.zeros((self._num_joints,))
 
-        # NOTE: I think you can get the number of degrees of freedom and shit from the idyntree library... Double check to see if you need some sort of special C++ -> Python bindings
+        self._end_effector_target = np.zeros((6,))
 
     def callback_pid(self) -> None:
 
-        self._joint_targets = self.solve_ik()
+        self._joint_targets = self._panda.solve_ik(self._end_effector_target[:3], self._end_effector_target[3:])
 
         # compute the effort from 
         err = self._joint_targets - self._joint_positions
@@ -65,56 +54,6 @@ class PandaPickAndPlace(Node):
         msg.data = self._effort.copy()
         self._joint_commands_publisher.publish(msg)
         # self.get_logger().info('Publishing: "%s"' % msg.data)
-
-    def get_panda_ik(self,
-                    panda: Panda,
-                    optimized_joints: List[str]) -> \
-        inverse_kinematics_nlp.InverseKinematicsNLP:
-
-        # Create IK
-        ik = inverse_kinematics_nlp.InverseKinematicsNLP(
-            urdf_filename=panda.get_model_file(),
-            considered_joints=optimized_joints,
-            joint_serialization=panda.joint_names())
-
-        # Initialize IK
-        ik.initialize(verbosity=1,
-                    floating_base=False,
-                    cost_tolerance=1E-8,
-                    constraints_tolerance=1E-8,
-                    base_frame=panda.base_frame())
-
-        # Set the current configuration
-        ik.set_current_robot_configuration(
-            base_position=np.array([panda.base_position().x, panda.base_position().y, panda.base_position().z]),
-            base_quaternion=np.array([panda.base_orientation().x, panda.base_orientation().y, panda.base_orientation().z, panda.base_orientation().w]),
-            joint_configuration=panda.joint_positions())
-
-        # Add the cartesian target of the end effector
-        end_effector = "end_effector_frame"
-        ik.add_target(frame_name=end_effector,
-                    target_type=inverse_kinematics_nlp.TargetType.POSE,
-                    as_constraint=False)
-
-        return ik
-
-    def solve_ik(self,
-            target_position: np.ndarray,
-            target_orientation: np.ndarray,
-            ik: inverse_kinematics_nlp.InverseKinematicsNLP) -> np.ndarray:
-
-        quat_xyzw = R.from_euler(seq="y", angles=90, degrees=True).as_quat()
-
-        ik.update_transform_target(
-            target_name=ik.get_active_target_names()[0],
-            position=target_position,
-            quaternion=conversions.Quaternion.to_wxyz(xyzw=quat_xyzw))
-
-        # Run the IK
-        ik.solve()
-
-        return ik.get_reduced_solution().joint_configuration
-
 
     def end_effector_reached(self,
                             position: np.array,

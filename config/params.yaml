@@ -1,3 +1,9 @@
-pick_and_place:
+panda_pick_and_place:
   ros__parameters:
+    control_dt: 0.001 # 1 kHz
+    joint_control_topic: 'joint_group_effort_controller/command'
     model_file: 'description/models/panda/panda.urdf'
+    base_frame: 'panda_link0'
+    end_effector_frame: 'end_effector_frame'
+    exclude_tag: 'finger' # tag for the joints to exclude from the IK optimization
+    initial_joint_angles: [0., -0.785, 0., -2.356, 0., 1.571, 0.785, 0., 0.]

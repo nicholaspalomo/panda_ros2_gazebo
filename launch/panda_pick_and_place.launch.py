@@ -10,6 +10,10 @@ import os
 
 def generate_launch_description():
     pkg_share = launch_ros.substitutions.FindPackageShare(package='panda_ros2_gazebo').find('panda_ros2_gazebo')
+    parameter_file_path = os.path.join(pkg_share,
+        "config",
+        "params.yaml"
+    )
     default_model_path = os.path.join(pkg_share,
         "description",
         "models",
@@ -21,8 +25,13 @@ def generate_launch_description():
         package='panda_ros2_gazebo',
         # namespace=...
         executable='panda_ros2_gazebo_node',
-        name='sim'
+        name='panda_pick_and_place',
+        parameters=[
+            parameter_file_path
+        ],
     )
+
+    # TODO: Load parameters from parameter server
 
     return launch.LaunchDescription([
         panda_pick_and_place_node
