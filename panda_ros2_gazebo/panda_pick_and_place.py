@@ -18,8 +18,6 @@ from sensor_msgs.msg import JointState
 
 from rcl_interfaces.srv import GetParameters
 
-# TODO: Publish the end effector odometry message. Make sure to update the end effector odometry on every call to the control callback
-
 # Configure numpy output
 np.set_printoptions(precision=4, suppress=True)
 
@@ -32,18 +30,30 @@ class PandaPickAndPlace(Node):
         self._end_effector_pose_publisher = self.create_publisher(Odometry, self.get_parameter('end_effector_pose').value)
         self._joint_states_subscriber = self.create_subscription(JointState, '/joint_states', self.callback_joint_states, 10)
         self._control_dt = self.get_parameter('control_dt').value
-        self._control_callback_timer = self.create_timer(self._control_dt, self.callback_pid)
-        self._run_callback = self.create_timer(0.001, self.run)
+        self._control_callback_timer = self.create_timer(self._control_dt, self.control_callback)
+        self._run_callback = self.create_timer(self._control_dt, self.run)
 
         self._panda = Panda(self.handle)
 
-        self._num_joints = self._panda.num_joints()
-        self._err = np.zeros((self._num_joints,))
-        self._int_err = np.zeros((self._num_joints,))
+        self._num_joints = self._panda.num_joints
         self._joint_targets = self._panda.reset_model()
         self._joint_states = JointState()
 
-        # TODO: Get the PID gains from the parameter server
+        self._end_effector_target = Odometry()
+        self._end_effector_target.header.seq = np.uint32(0)
+        self._end_effector_target.header.stamp = rclpy.get_rostime()
+        self._end_effector_target.header.frame_id = self._panda.base_frame()
+        self._end_effector_target.child_frame_id = self._panda.end_effector_frame()
+        self._end_effector_target.pose.pose.orientation.w = 1.0
+
+        # publish the initial end effector target odometry message
+        self._end_effector_target_publisher
+
+    def setup_joint_group_effort_controller(self):
+
+        self._err = np.zeros((self._num_joints,))
+        self._int_err = np.zeros((self._num_joints,))
+
         joint_controller_name = self.get_parameter('joint_controller_name')
 
         # create a service client to retrieve the PID gains from the joint_group_effort_controller (until ROS2 has a joint_group_position_controller).
@@ -57,7 +67,7 @@ class PandaPickAndPlace(Node):
         self._p_gains = np.zeros((self._num_joints,))
         self._i_gains = np.zeros((self._num_joints,))
         self._d_gains = np.zeros((self._num_joints,))
-        for i, joint in enumerate(self._panda.joint_names()):
+        for i, joint in enumerate(self._panda.joint_names):
             
             self._request.names = {'gains.' + joint + '.p', 'gains.' + joint + '.i', 'gains.' + joint + '.d'}
 
@@ -67,22 +77,20 @@ class PandaPickAndPlace(Node):
             self._i_gains[i] = self._response.values[1]
             self._d_gains[i] = self._response.values[2]
 
-        self._end_effector_target = Odometry()
-        self._end_effector_target.header.seq = np.uint32(0)
-        self._end_effector_target.header.stamp = rclpy.get_rostime()
-        self._end_effector_target.header.frame_id = self._panda.base_frame()
-        self._end_effector_target.child_frame_id = self._panda.end_effector_frame()
-        self._end_effector_target.pose.pose.orientation.w = 1.0
-
-        # publish the initial end effector target odometry message
-        self._end_effector_target_publisher
-
     def callback_joint_states(self, joint_states):
         
         self._panda.set_joint_states(joint_states)
         self._joint_states = joint_states
 
-    def callback_pid(self) -> None:
+    def control_callback(self) -> None:
+
+        self._joint_targets = self._panda.solve_ik(self._end_effector_target)
+
+        msg = Float64MultiArray()
+        msg.data = self._joint_targets.copy()
+        self._joint_commands_publisher.publish(msg)
+
+    def pid_callback(self) -> None:
 
         self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
@@ -130,14 +138,14 @@ class PandaPickAndPlace(Node):
 
     def move_fingers(self,
                     action: FingersAction) -> None:
-
-        for i, joint_name in enumerate(self._panda.joint_names()):
+        # TODO: Include the fingers in the control loop
+        for i, joint_name in enumerate(self._panda.joint_names):
             if self._panda.finger_joint_limits().get(joint_name) is not None:
                 if action is FingersAction.OPEN:
-                    self._joint_targets[i] = self._panda.finger_joint_limits()[joint_name][1]
+                    self._joint_targets[i] = self._panda.finger_joint_limits[joint_name][1]
 
                 if action is FingersAction.CLOSE:
-                    self._joint_targets[i] = self._panda.finger_joint_limits()[joint_name][0]
+                    self._joint_targets[i] = self._panda.finger_joint_limits[joint_name][0]
 
     # def get_unload_position(bucket: scenario_core.Model) -> np.ndarray:
 

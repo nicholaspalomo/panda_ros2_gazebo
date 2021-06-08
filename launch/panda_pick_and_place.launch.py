@@ -31,8 +31,6 @@ def generate_launch_description():
         ],
     )
 
-    # TODO: Load parameters from parameter server
-
     return launch.LaunchDescription([
         panda_pick_and_place_node
     ])

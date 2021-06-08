@@ -52,7 +52,7 @@ class Panda():
         self._base_orientation = initial_pose.rotation
 
         if model_file is None:
-            self._urdf = self.get_model_file()
+            self._urdf = self.model_file
 
             if not os.path.exists(self._urdf):
                 raise FileNotFoundError(self._urdf)
@@ -120,10 +120,10 @@ class Panda():
         """ Returns an end effector odometry message """
 
         # get the end effector pose from the kinematic model
-        end_effector_pose_in_base_frame = self._fk.get_relative_transform(self.base_frame(), self.end_effector_frame())
+        end_effector_pose_in_base_frame = self._fk.get_relative_transform(self.base_frame, self.end_effector_frame)
 
         # Get the end effector Jacobian
-        J = self._fk.get_frame_jacobian(self.end_effector_frame())
+        J = self._fk.get_frame_jacobian(self.end_effector_frame)
 
         end_effector_twist = np.matmul(J, self._joint_states.velocity[:-2, np.newaxis])
 
@@ -170,29 +170,29 @@ class Panda():
 
         # Create IK
         ik = inverse_kinematics_nlp.InverseKinematicsNLP(
-            urdf_filename=self.get_model_file(),
+            urdf_filename=self.model_file,
             considered_joints=optimized_joints,
-            joint_serialization=self.joint_names())
+            joint_serialization=self.joint_names)
 
         # Initialize IK
         ik.initialize(verbosity=1,
                     floating_base=False,
                     cost_tolerance=1E-8,
                     constraints_tolerance=1E-8,
-                    base_frame=self.base_frame())
+                    base_frame=self.base_frame)
 
         # Set the current configuration
         ik.set_current_robot_configuration(
-            base_position=np.array([self.base_position().x, self.base_position().y, self.base_position().z]),
+            base_position=np.array([self.base_position.x, self.base_position.y, self.base_position.z]),
             base_quaternion=np.array([
-                self.base_orientation().x, 
-                self.base_orientation().y, 
-                self.base_orientation().z, 
-                self.base_orientation().w]),
-            joint_configuration=self.joint_positions())
+                self.base_orientation.x, 
+                self.base_orientation.y, 
+                self.base_orientation.z, 
+                self.base_orientation.w]),
+            joint_configuration=self.joint_positions)
 
         # Add the cartesian target of the end effector
-        ik.add_target(frame_name=self.end_effector_frame(),
+        ik.add_target(frame_name=self.end_effector_frame,
                     target_type=inverse_kinematics_nlp.TargetType.POSE,
                     as_constraint=False)
 
@@ -223,26 +223,32 @@ class Panda():
 
         return self._initial_joint_position_targets
 
+    @property
     def num_joints(self) -> int:
 
         return len(self._joint_names)
 
+    @property
     def num_arm_joints(self) -> int:
 
         return len(self._arm_joint_names)
 
+    @property
     def num_end_effector_joints(self) -> int:
 
         return len(self._finger_joint_names)
 
+    @property
     def base_position(self) -> Vector3:
 
         return self._base_position
 
+    @property
     def base_orientation(self) -> Quaternion:
 
         return self._base_orientation
 
+    @property
     def joint_states(self) -> JointState:
 
         return self._joint_states
@@ -251,27 +257,33 @@ class Panda():
 
         self._joint_states = joint_states
 
+    @property
     def joint_positions(self) -> np.ndarray:
 
         return self._joint_states.position
 
+    @property
     def joint_names(self) -> List[str]:
 
         return self._joint_names
 
+    @property
     def finger_joint_limits(self):
 
         return self._finger_joint_limits
 
+    @property
     def base_frame(self) -> str:
 
         return self._node_handle.get_parameter('base_frame').value
 
+    @property
     def end_effector_frame(self) -> str:
 
         return self._node_handle.get_parameter('end_effector_frame').value
 
-    def get_model_file(self) -> str:
+    @property
+    def model_file(self) -> str:
 
         return self._node_handle.get_parameter('model_file').value
 
