@@ -5,7 +5,7 @@
 import os
 import numpy as np
 from enum import Enum, auto
-from panda_ros2_gazebo import rbd
+from ... import rbd
 import idyntree.bindings as idt
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Union

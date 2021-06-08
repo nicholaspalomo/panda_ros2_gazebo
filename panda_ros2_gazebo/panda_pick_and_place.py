@@ -1,19 +1,14 @@
-from ntpath import join
 import rclpy
 from rclpy.node import Node
 
-from std_msgs.msg import Float64MultiArray
-
-import time
 import numpy as np
-from typing import List
-from functools import partial
-from models.panda import Panda, FingersAction
+
+from .python.models.panda import Panda, FingersAction
 from scipy.spatial.transform import Rotation as R
 
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState
-
+from std_msgs.msg import Float64MultiArray
 from rcl_interfaces.srv import GetParameters
 
 # Configure numpy output
