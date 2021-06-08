@@ -107,6 +107,7 @@ class Panda():
         self._end_effector_odom.header.stamp = rclpy.get_rostime()
         self._end_effector_odom.header.frame_id = self.base_frame()
         self._end_effector_odom.child_frame_id = self.end_effector_frame()
+        self._end_effector_odom.pose.pose.orientation.w = 1.0 # so that orientation is a unit quaternion
 
         # Create the inverse kinematics model
         self._ik = self.get_panda_ik(self._arm_joint_names)
@@ -124,7 +125,7 @@ class Panda():
         # Get the end effector Jacobian
         J = self._fk.get_frame_jacobian(self.end_effector_frame())
 
-        end_effector_twist = np.matmul(J, self.joint_states.velocity[:-2, np.newaxis])
+        end_effector_twist = np.matmul(J, self._joint_states.velocity[:-2, np.newaxis])
 
         end_effector_pose_msg = PoseWithCovariance()
         pose = Pose()
@@ -158,6 +159,9 @@ class Panda():
         end_effector_twist_msg.twist = twist
 
         self._end_effector_odom.twist = end_effector_twist_msg
+
+        self._end_effector_odom.header.seq += 1
+        self._end_effector_odom.header.stamp = rclpy.get_rostime()
 
         return self._end_effector_odom
 
@@ -242,6 +246,10 @@ class Panda():
     def joint_states(self) -> JointState:
 
         return self._joint_states
+
+    def set_joint_states(self, joint_states: JointState):
+
+        self._joint_states = joint_states
 
     def joint_positions(self) -> np.ndarray:
 

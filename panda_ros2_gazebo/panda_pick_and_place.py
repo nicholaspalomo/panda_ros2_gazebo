@@ -11,6 +11,7 @@ from typing import List
 from functools import partial
 from models.panda import Panda, FingersAction
 from scenario import core as scenario_core
+from scipy.spatial.transform import Rotation as R
 
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState
@@ -28,10 +29,11 @@ class PandaPickAndPlace(Node):
 
         self._joint_commands_publisher = self.create_publisher(Float64MultiArray, self.get_parameter('joint_control_topic').value)
         self._end_effector_target_publisher = self.create_publisher(Odometry, self.get_parameter('end_effector_target_topic').value)
-        self._end_effector_pose_subscriber = self.create_subscription()
-        self._joint_states_subscriber = self.create_subscription(JointState, '/joint_states')
+        self._end_effector_pose_publisher = self.create_publisher(Odometry, self.get_parameter('end_effector_pose').value)
+        self._joint_states_subscriber = self.create_subscription(JointState, '/joint_states', self.callback_joint_states, 10)
         self._control_dt = self.get_parameter('control_dt').value
         self._control_callback_timer = self.create_timer(self._control_dt, self.callback_pid)
+        self._run_callback = self.create_timer(0.001, self.run)
 
         self._panda = Panda(self.handle)
 
@@ -39,6 +41,7 @@ class PandaPickAndPlace(Node):
         self._err = np.zeros((self._num_joints,))
         self._int_err = np.zeros((self._num_joints,))
         self._joint_targets = self._panda.reset_model()
+        self._joint_states = JointState()
 
         # TODO: Get the PID gains from the parameter server
         joint_controller_name = self.get_parameter('joint_controller_name')
@@ -65,13 +68,26 @@ class PandaPickAndPlace(Node):
             self._d_gains[i] = self._response.values[2]
 
         self._end_effector_target = Odometry()
+        self._end_effector_target.header.seq = np.uint32(0)
+        self._end_effector_target.header.stamp = rclpy.get_rostime()
+        self._end_effector_target.header.frame_id = self._panda.base_frame()
+        self._end_effector_target.child_frame_id = self._panda.end_effector_frame()
+        self._end_effector_target.pose.pose.orientation.w = 1.0
+
+        # publish the initial end effector target odometry message
+        self._end_effector_target_publisher
+
+    def callback_joint_states(self, joint_states):
+        
+        self._panda.set_joint_states(joint_states)
+        self._joint_states = joint_states
 
     def callback_pid(self) -> None:
 
         self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
         # compute the effort from 
-        err = self._joint_targets - self._joint_positions
+        err = self._joint_targets - self._joint_states.position # TODO: Populate this in the joint_states callback
         self._int_err += self._control_dt * err
         deriv_err = (err - self._err) / self._control_dt
 
@@ -127,269 +143,35 @@ class PandaPickAndPlace(Node):
 
     #     return bucket.base_position() + np.array([0, 0, 0.3])
 
-    # def insert_bucket(world: scenario_gazebo.World) -> scenario_gazebo.Model:
-
-    #     # Insert objects from Fuel
-    #     uri = lambda org, name: f"https://fuel.ignitionrobotics.org/{org}/models/{name}"
-
-    #     # Download the cube SDF file
-    #     bucket_sdf = scenario_gazebo.get_model_file_from_fuel(
-    #         uri=uri(org="GoogleResearch",
-    #                 name="Threshold_Basket_Natural_Finish_Fabric_Liner_Small"),
-    #         use_cache=False)
-
-    #     # Assign a custom name to the model
-    #     model_name = "bucket"
-
-    #     # Insert the model
-    #     assert world.insert_model(bucket_sdf,
-    #                               scenario_core.Pose([0.68, 0, 1.02], [1., 0, 0, 1]),
-    #                               model_name)
-
-    #     # Return the model
-    #     return world.get_model(model_name=model_name)
-
-
-    # def insert_table(world: scenario_gazebo.World) -> scenario_gazebo.Model:
-
-    #     # Insert objects from Fuel
-    #     uri = lambda org, name: f"https://fuel.ignitionrobotics.org/{org}/models/{name}"
-
-    #     # Download the cube SDF file
-    #     bucket_sdf = scenario_gazebo.get_model_file_from_fuel(
-    #         uri=uri(org="OpenRobotics",
-    #                 name="Table"),
-    #         use_cache=False)
-
-    #     # Assign a custom name to the model
-    #     model_name = "table"
-
-    #     # Insert the model
-    #     assert world.insert_model(bucket_sdf,
-    #                               scenario_core.Pose_identity(),
-    #                               model_name)
-
-    #     # Return the model
-    #     return world.get_model(model_name=model_name)
-
-
-    # def insert_cube_in_operating_area(world: scenario_gazebo.World) -> scenario_gazebo.Model:
-
-    #     # Insert objects from Fuel
-    #     uri = lambda org, name: f"https://fuel.ignitionrobotics.org/{org}/models/{name}"
-
-    #     # Download the cube SDF file
-    #     cube_sdf = scenario_gazebo.get_model_file_from_fuel(
-    #         uri=uri(org="openrobotics", name="wood cube 5cm"), use_cache=False)
-
-    #     # Sample a random position
-    #     random_position = np.random.uniform(low=[0.2, -0.3, 1.01], high=[0.4, 0.3, 1.01])
-
-    #     # Get a unique name
-    #     model_name = gym_ignition.utils.scenario.get_unique_model_name(
-    #         world=world, model_name="cube")
-
-    #     # Insert the model
-    #     assert world.insert_model(
-    #         cube_sdf, scenario_core.Pose(random_position, [1., 0, 0, 0]), model_name)
-
-    #     # Return the model
-    #     return world.get_model(model_name=model_name)
-
     def run(self):
-        # ====================
-        # INITIALIZE THE WORLD
-        # ====================
 
-        # Get the simulator and the world
-        gazebo, world = gym_ignition.utils.scenario.init_gazebo_sim(
-            step_size=0.001, real_time_factor=2.0, steps_per_run=1)
+        if self.end_effector_reached():
+            # sample a new end effector target
+            self._end_effector_target.header.seq += 1
+            self._end_effector_target.header.stamp = rclpy.get_rostime()
+            self._end_effector_target.pose.pose.position.x = np.random.uniform(low=0.25, high=0.75)
+            self._end_effector_target.pose.pose.position.y = np.random.uniform(low=0.25, high=0.75)
+            self._end_effector_target.pose.pose.position.z = np.random.uniform(low=0.25, high=0.75)
 
-        # Open the GUI
-        gazebo.gui()
-        time.sleep(3)
-        gazebo.run(paused=True)
+            r = np.random.uniform(low=-np.pi/4, high=np.pi/4)
+            p = np.random.uniform(low=-np.pi/4, high=np.pi/4)
+            y = np.random.uniform(low=-np.pi/4, high=np.pi/4)
 
-        # Insert the Panda manipulator
-        panda = gym_ignition_environments.models.panda.Panda(
-            world=world, position=[-0.1, 0, 1.0])
+            quat_xyzw = R.from_euler('xyz', [r, p, y], from_degrees=False)
+            self._end_effector_target.pose.pose.orientation.x = quat_xyzw[0]
+            self._end_effector_target.pose.pose.orientation.x = quat_xyzw[1]
+            self._end_effector_target.pose.pose.orientation.x = quat_xyzw[2]
+            self._end_effector_target.pose.pose.orientation.x = quat_xyzw[3]
 
-        # Enable contacts only for the finger links
-        panda.get_link("panda_leftfinger").enable_contact_detection(True)
-        panda.get_link("panda_rightfinger").enable_contact_detection(True)
+            print("End effector target set to [x, y z]=[{}, {}, {}], [r, p , y]=[{}, {}, {}]".format(
+                self._end_effector_target.pose.pose.position.x,
+                self._end_effector_target.pose.pose.position.y,
+                self._end_effector_target.pose.pose.position.z,
+                r, p, y
+            ))
 
-        # Process model insertion in the simulation
-        gazebo.run(paused=True)
-
-        # Monkey patch the class with finger helpers
-        panda.open_fingers = partial(move_fingers, panda=panda, action=FingersAction.OPEN)
-        panda.close_fingers = partial(move_fingers, panda=panda, action=FingersAction.CLOSE)
-
-        # Add a custom joint controller to the panda
-        add_panda_controller(panda=panda, controller_period=gazebo.step_size())
-
-        # Populate the world
-        table = insert_table(world=world)
-        bucket = insert_bucket(world=world)
-        gazebo.run(paused=True)
-
-        # Create and configure IK for the panda
-        ik_joints = [j.name() for j in panda.joints() if j.type is not scenario_core.JointType_fixed ]
-        ik = get_panda_ik(panda=panda, optimized_joints=ik_joints)
-
-        # Get some manipulator links
-        finger_left = panda.get_link(link_name="panda_leftfinger")
-        finger_right = panda.get_link(link_name="panda_rightfinger")
-        end_effector_frame = panda.get_link(link_name="end_effector_frame")
-
-        while True:
-
-            # Insert a new cube
-            cube = insert_cube_in_operating_area(world=world)
-            gazebo.run(paused=True)
-
-            # =========================
-            # PHASE 1: Go over the cube
-            # =========================
-
-            print("Hovering")
-
-            # Position over the cube
-            position_over_cube = np.array(cube.base_position()) + np.array([0, 0, 0.4])
-
-            # Get the joint configuration that brings the EE over the cube
-            over_joint_configuration = solve_ik(
-                target_position=position_over_cube,
-                target_orientation=np.array(cube.base_orientation()),
-                ik=ik)
-
-            # Set the joint references
-            assert panda.set_joint_position_targets(over_joint_configuration, ik_joints)
-
-            # Open the fingers
-            panda.open_fingers()
-
-            # Run the simulation until the EE reached the desired position
-            while not end_effector_reached(position=position_over_cube,
-                                        end_effector_link=end_effector_frame,
-                                        max_error_pos=0.05,
-                                        max_error_vel=0.5):
-                gazebo.run()
-
-            # Wait a bit more
-            [gazebo.run() for _ in range(500)]
-
-            # =======================
-            # PHASE 2: Reach the cube
-            # =======================
-
-            print("Reaching")
-
-            # Get the joint configuration that brings the EE to the cube
-            over_joint_configuration = solve_ik(
-                target_position=np.array(cube.base_position()) + np.array([0, 0, 0.04]),
-                target_orientation=np.array(cube.base_orientation()),
-                ik=ik)
-
-            # Set the joint references
-            assert panda.set_joint_position_targets(over_joint_configuration, ik_joints)
-            panda.open_fingers()
-
-            # Run the simulation until the EE reached the desired position
-            while not end_effector_reached(
-                    position=np.array(cube.base_position()) + np.array([0, 0, 0.04]),
-                    end_effector_link=end_effector_frame):
-
-                gazebo.run()
-
-            # Wait a bit more
-            [gazebo.run() for _ in range(500)]
-
-            # =======================
-            # PHASE 3: Grasp the cube
-            # =======================
-
-            print("Grasping")
-
-            # Close the fingers
-            panda.close_fingers()
-
-            # Detect a graps reading the contact wrenches of the finger links
-            while not (np.linalg.norm(finger_left.contact_wrench()) >= 50.0 and
-                    np.linalg.norm(finger_right.contact_wrench()) >= 50.0):
-                gazebo.run()
-
-            # =============
-            # PHASE 4: Lift
-            # =============
-
-            print("Lifting")
-
-            # Position over the cube
-            position_over_cube = np.array(cube.base_position()) + np.array([0, 0, 0.4])
-
-            # Get the joint configuration that brings the EE over the cube
-            over_joint_configuration = solve_ik(
-                target_position=position_over_cube,
-                target_orientation=np.array(cube.base_orientation()),
-                ik=ik)
-
-            # Set the joint references
-            assert panda.set_joint_position_targets(over_joint_configuration, ik_joints)
-
-            # Run the simulation until the EE reached the desired position
-            while not end_effector_reached(position=position_over_cube,
-                                        end_effector_link=end_effector_frame,
-                                        max_error_pos=0.1,
-                                        max_error_vel=0.5):
-                gazebo.run()
-
-            # Wait a bit more
-            [gazebo.run() for _ in range(500)]
-
-            # =====================================
-            # PHASE 5: Place the cube in the bucket
-            # =====================================
-
-            print("Dropping")
-
-            # Get the joint configuration that brings the EE over the bucket
-            unload_joint_configuration = solve_ik(
-                target_position=get_unload_position(bucket=bucket),
-                target_orientation=np.array([0, 1.0, 0, 0]),
-                ik=ik)
-
-            # Set the joint references
-            assert panda.set_joint_position_targets(unload_joint_configuration,
-                                                    ik_joints)
-
-            # Run the simulation until the EE reached the desired position
-            while not end_effector_reached(
-                    position=get_unload_position(bucket=bucket) +
-                            np.random.uniform(low=-0.05, high=0.05, size=3),
-                    end_effector_link=end_effector_frame,
-                    max_error_pos=0.01,
-                    max_error_vel=0.1,
-                    mask=np.array([1, 1, 0])):
-
-                gazebo.run()
-
-            # Open the fingers
-            panda.open_fingers()
-
-            # Wait that both fingers are in not contact (with the cube)
-            while finger_left.in_contact() or finger_right.in_contact():
-                gazebo.run()
-
-            # Wait a bit more
-            [gazebo.run() for _ in range(500)]
-
-            # Remove the cube
-            world.remove_model(model_name=cube.name())
-
-# It is always a good practice to close the simulator.
-# In this case it is not required since above there is an infinite loop.
-# gazebo.close()
+            self._end_effector_target_publisher.publish(self._end_effector_target)
+            self._end_effector_pose_publisher.publish(self._panda.end_effector_pose())
 
 def main(args=None):
     rclpy.init(args=args)
