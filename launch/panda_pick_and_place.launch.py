@@ -24,7 +24,7 @@ def generate_launch_description():
     panda_pick_and_place_node = launch_ros.actions.Node(
         package='panda_ros2_gazebo',
         # namespace=...
-        executable='panda_ros2_gazebo_node',
+        executable='panda_pick_and_place',
         name='panda_pick_and_place',
         parameters=[
             parameter_file_path

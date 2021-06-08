@@ -6,8 +6,8 @@ import numpy as np
 from typing import List, Tuple
 import idyntree.bindings as idt
 from scenario import core as scenario_core
-from gym_ignition.rbd import conversions
-from gym_ignition.rbd.idyntree import numpy
+from panda_ros2_gazebo.rbd import conversions
+from panda_ros2_gazebo.rbd.idyntree import numpy
 from .helpers import FrameVelocityRepresentation, iDynTreeHelpers
 
 class KinDynComputations:

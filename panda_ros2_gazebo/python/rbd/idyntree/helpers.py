@@ -7,7 +7,22 @@ import abc
 from typing import List
 from enum import Enum, auto
 import idyntree.bindings as idt
-from gym_ignition.utils import resource_finder
+from os.path import exists, isfile
+
+def find_resource(file_name: str) -> str:
+    file_abs_path = ""
+
+    # Handle if the path is absolute
+    if os.path.isabs(file_name):
+        if isfile(file_name):
+            return file_name
+        else:
+            raise FileNotFoundError(f"Failed to find resource '{file_name}'")
+
+    if not file_abs_path:
+        raise FileNotFoundError(f"Failed to find resource '{file_name}'")
+
+    return file_abs_path
 
 
 class FrameVelocityRepresentation(Enum):
@@ -34,7 +49,7 @@ class iDynTreeHelpers(abc.ABC):
     def get_model_loader(model_file: str, considered_joints: List[str] = None):
 
         # Find the urdf file
-        urdf_file = resource_finder.find_resource(file_name=model_file)
+        urdf_file = find_resource(file_name=model_file)
 
         # Get the file extension
         folder, model_file = os.path.split(urdf_file)

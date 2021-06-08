@@ -3,17 +3,17 @@
 # GNU Lesser General Public License v2.1 or any later version.
 
 import os
-from panda_ros2_gazebo.panda_ros2_gazebo.python.gym_ignition.rbd.idyntree.helpers import FrameVelocityRepresentation
+from panda_ros2_gazebo.panda_ros2_gazebo.python.rbd.idyntree.helpers import FrameVelocityRepresentation
 
-from panda_ros2_gazebo.panda_ros2_gazebo.python.gym_ignition.rbd.idyntree.kindyncomputations import KinDynComputations
+from panda_ros2_gazebo.panda_ros2_gazebo.python.rbd.idyntree.kindyncomputations import KinDynComputations
 
 import enum
 import numpy as np
 from typing import List
 from scenario import core as scenario
 import idyntree.bindings as idt
-from gym_ignition.rbd import conversions
-from gym_ignition.rbd.idyntree import inverse_kinematics_nlp, kindyncomputations, helpers
+from rbd import conversions
+from rbd.idyntree import inverse_kinematics_nlp, kindyncomputations, helpers
 from scipy.spatial.transform import Rotation as R
 
 from geometry_msgs.msg import Transform, Vector3, Quaternion, PoseWithCovariance, TwistWithCovariance, Pose, Twist

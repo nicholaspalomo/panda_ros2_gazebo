@@ -6,7 +6,6 @@ from std_msgs.msg import Float64MultiArray
 
 import time
 import numpy as np
-import gym_ignition
 from typing import List
 from functools import partial
 from models.panda import Panda, FingersAction

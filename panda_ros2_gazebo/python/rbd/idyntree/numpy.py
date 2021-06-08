@@ -1,6 +1,6 @@
 import abc
 import numpy as np
-from gym_ignition import rbd
+from panda_ros2_gazebo import rbd
 from typing import Tuple, Union
 import idyntree.bindings as idt
 
