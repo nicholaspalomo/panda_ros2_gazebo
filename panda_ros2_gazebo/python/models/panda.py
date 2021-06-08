@@ -157,9 +157,9 @@ class Panda():
         velocity.y = end_effector_twist[1]
         velocity.z = end_effector_twist[2]
         twist.linear = velocity
-        velocity.x = end_effector_twist[0]
-        velocity.y = end_effector_twist[1]
-        velocity.z = end_effector_twist[2]
+        velocity.x = end_effector_twist[3]
+        velocity.y = end_effector_twist[4]
+        velocity.z = end_effector_twist[5]
         twist.angular = velocity
 
         end_effector_twist_msg.twist = twist
@@ -201,11 +201,11 @@ class Panda():
 
         return ik
 
-    def solve_ik(self, target_pose: Transform) -> np.ndarray:
+    def solve_ik(self, target_pose: Odometry) -> np.ndarray:
 
-        target_position = np.array([target_pose.translation.x, target_pose.translation.y, target_pose.translation.z])
+        target_position = np.array([target_pose.pose.pose.position.x, target_pose.pose.pose.position.y, target_pose.pose.pose.position.z])
 
-        quat_xyzw = np.array([target_pose.rotation.x, target_pose.rotation.y, target_pose.rotation.z, target_pose.rotation.w])
+        quat_xyzw = np.array([target_pose.pose.pose.orientation.x, target_pose.pose.pose.orientation.y, target_pose.pose.pose.orientation.z, target_pose.pose.pose.orientation.w])
 
         quat_xyzw = R.from_euler(seq="y", angles=90, degrees=True).as_quat()
 

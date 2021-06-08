@@ -1,3 +1,4 @@
+from ntpath import join
 import rclpy
 from rclpy.node import Node
 
@@ -11,8 +12,10 @@ from functools import partial
 from models.panda import Panda, FingersAction
 from scenario import core as scenario_core
 
-from geometry_msgs.msg import TransformStamped
+from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState
+
+from rcl_interfaces.srv import GetParameters
 
 # TODO: Publish the end effector odometry message. Make sure to update the end effector odometry on every call to the control callback
 
@@ -24,12 +27,11 @@ class PandaPickAndPlace(Node):
         super().__init__('pick_and_place')
 
         self._joint_commands_publisher = self.create_publisher(Float64MultiArray, self.get_parameter('joint_control_topic').value)
-        self._end_effector_target_publisher = self.create_publisher(TransformStamped, self.get_parameter('end_effector_target_topic').value)
-        self._joint_states_subscriber = self.create_subscriber(JointState, '/joint_states')
+        self._end_effector_target_publisher = self.create_publisher(Odometry, self.get_parameter('end_effector_target_topic').value)
+        self._end_effector_pose_subscriber = self.create_subscription()
+        self._joint_states_subscriber = self.create_subscription(JointState, '/joint_states')
         self._control_dt = self.get_parameter('control_dt').value
         self._control_callback_timer = self.create_timer(self._control_dt, self.callback_pid)
-
-        # create a service client to retrieve the PID gains from the joint_group_effort_controller (until ROS2 has a joint_group_position_controller).
 
         self._panda = Panda(self.handle)
 
@@ -40,17 +42,33 @@ class PandaPickAndPlace(Node):
 
         # TODO: Get the PID gains from the parameter server
         joint_controller_name = self.get_parameter('joint_controller_name')
+
+        # create a service client to retrieve the PID gains from the joint_group_effort_controller (until ROS2 has a joint_group_position_controller).
+        self._parameter_getter_client = self.create_client(GetParameters, '/' + joint_controller_name + '/get_parameters')
+        while not self._parameter_getter_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('service not available, waiting again...')
+
+        self._request = GetParameters.Request()
+        self._response = GetParameters.Response()
+
         self._p_gains = np.zeros((self._num_joints,))
         self._i_gains = np.zeros((self._num_joints,))
         self._d_gains = np.zeros((self._num_joints,))
         for i, joint in enumerate(self._panda.joint_names()):
-            self._p_gains[i] = self.get_parameter('/' + joint_controller_name) # get_parameters_by_prefix is what you want here
+            
+            self._request.names = {'gains.' + joint + '.p', 'gains.' + joint + '.i', 'gains.' + joint + '.d'}
 
-        self._end_effector_target = TransformStamped()
+            self._response = self._parameter_getter_client.call_async(self._request)
+
+            self._p_gains[i] = self._response.values[0]
+            self._i_gains[i] = self._response.values[1]
+            self._d_gains[i] = self._response.values[2]
+
+        self._end_effector_target = Odometry()
 
     def callback_pid(self) -> None:
 
-        self._joint_targets = self._panda.solve_ik(self._end_effector_target.transform)
+        self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
         # compute the effort from 
         err = self._joint_targets - self._joint_positions
@@ -67,17 +85,33 @@ class PandaPickAndPlace(Node):
         # self.get_logger().info('Publishing: "%s"' % msg.data)
 
     def end_effector_reached(self,
-                            position: np.array,
-                            end_effector_link: scenario_core.Link,
                             max_error_pos: float = 0.01,
                             max_error_vel: float = 0.5,
                             mask: np.ndarray = np.array([1., 1., 1.])) -> bool:
+        
+        current_end_effector_pose = self._panda.end_effector_pose()
+        position = np.array([
+            current_end_effector_pose.pose.pose.position.x,
+            current_end_effector_pose.pose.pose.position.y,
+            current_end_effector_pose.pose.pose.position.z])
+        velocity = np.array([
+            current_end_effector_pose.twist.twist.linear.x,
+            current_end_effector_pose.twist.twist.linear.y,
+            current_end_effector_pose.twist.twist.linear.z,
+            current_end_effector_pose.twist.twist.angular.x,
+            current_end_effector_pose.twist.twist.angular.y,
+            current_end_effector_pose.twist.twist.angular.z,
+        ])
+        target = np.array([
+            self._end_effector_target.pose.pose.position.x,
+            self._end_effector_target.pose.pose.position.y,
+            self._end_effector_target.pose.pose.position.z])
 
-        masked_target = mask * position
-        masked_current = mask * np.array(end_effector_link.position())
+        masked_target = mask * target
+        masked_current = mask * position
 
         return np.linalg.norm(masked_current - masked_target) < max_error_pos and \
-            np.linalg.norm(end_effector_link.world_linear_velocity()) < max_error_vel
+            np.linalg.norm(velocity[:3]) < max_error_vel
 
 
     # def get_unload_position(bucket: scenario_core.Model) -> np.ndarray:
