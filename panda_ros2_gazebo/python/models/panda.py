@@ -201,8 +201,11 @@ class Panda():
 
         return ik
 
-    def solve_ik(self, target_position: np.ndarray,
-            target_orientation: np.ndarray,) -> np.ndarray:
+    def solve_ik(self, target_pose: Transform) -> np.ndarray:
+
+        target_position = np.array([target_pose.translation.x, target_pose.translation.y, target_pose.translation.z])
+
+        quat_xyzw = np.array([target_pose.rotation.x, target_pose.rotation.y, target_pose.rotation.z, target_pose.rotation.w])
 
         quat_xyzw = R.from_euler(seq="y", angles=90, degrees=True).as_quat()
 

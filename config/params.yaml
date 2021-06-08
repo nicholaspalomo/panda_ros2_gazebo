@@ -1,7 +1,9 @@
 panda_pick_and_place:
   ros__parameters:
     control_dt: 0.001 # 1 kHz
+    joint_controller_name: 'joint_group_effort_controller'
     joint_control_topic: 'joint_group_effort_controller/command'
+    end_effector_target_topic: 'end_effector_target_pose'
     model_file: 'description/models/panda/panda.urdf'
     base_frame: 'panda_link0'
     end_effector_frame: 'end_effector_frame'

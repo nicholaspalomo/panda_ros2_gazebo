@@ -11,6 +11,9 @@ from functools import partial
 from models.panda import Panda, FingersAction
 from scenario import core as scenario_core
 
+from geometry_msgs.msg import TransformStamped
+from sensor_msgs.msg import JointState
+
 # TODO: Publish the end effector odometry message. Make sure to update the end effector odometry on every call to the control callback
 
 # Configure numpy output
@@ -20,28 +23,34 @@ class PandaPickAndPlace(Node):
     def __init__(self):
         super().__init__('pick_and_place')
 
-        self._joint_control_topic = "joint_group_effort_controller/command"
-        self._joint_commands_publisher = self.create_publisher(Float64MultiArray, self._joint_control_topic)
-        self._joint_states_subscriber = self.create_subscriber()
-        self._end_effector_pose_subscriber = self.create_subscriber()
+        self._joint_commands_publisher = self.create_publisher(Float64MultiArray, self.get_parameter('joint_control_topic').value)
+        self._end_effector_target_publisher = self.create_publisher(TransformStamped, self.get_parameter('end_effector_target_topic').value)
+        self._joint_states_subscriber = self.create_subscriber(JointState, '/joint_states')
         self._control_dt = self.get_parameter('control_dt').value
         self._control_callback_timer = self.create_timer(self._control_dt, self.callback_pid)
+
+        # create a service client to retrieve the PID gains from the joint_group_effort_controller (until ROS2 has a joint_group_position_controller).
 
         self._panda = Panda(self.handle)
 
         self._num_joints = self._panda.num_joints()
         self._err = np.zeros((self._num_joints,))
         self._int_err = np.zeros((self._num_joints,))
-        self._joint_targets = np.zeros((self._num_joints,))
+        self._joint_targets = self._panda.reset_model()
+
+        # TODO: Get the PID gains from the parameter server
+        joint_controller_name = self.get_parameter('joint_controller_name')
         self._p_gains = np.zeros((self._num_joints,))
         self._i_gains = np.zeros((self._num_joints,))
         self._d_gains = np.zeros((self._num_joints,))
+        for i, joint in enumerate(self._panda.joint_names()):
+            self._p_gains[i] = self.get_parameter('/' + joint_controller_name) # get_parameters_by_prefix is what you want here
 
-        self._end_effector_target = np.zeros((6,))
+        self._end_effector_target = TransformStamped()
 
     def callback_pid(self) -> None:
 
-        self._joint_targets = self._panda.solve_ik(self._end_effector_target[:3], self._end_effector_target[3:])
+        self._joint_targets = self._panda.solve_ik(self._end_effector_target.transform)
 
         # compute the effort from 
         err = self._joint_targets - self._joint_positions
