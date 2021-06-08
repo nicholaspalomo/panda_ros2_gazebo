@@ -21,7 +21,8 @@ from scipy.spatial.transform import Rotation as R
 from geometry_msgs.msg import Transform, Vector3, Quaternion, PoseWithCovariance, TwistWithCovariance, Pose, Twist
 from sensor_msgs.msg import JointState
 from nav_msgs.msg import Odometry
-from gazebo_msgs.msg import ModelState, SetModelState
+from gazebo_msgs.msg import EntityState
+from gazebo_msgs.srv import SetEntityState
 from std_srvs.srv import Empty
 
 import rclpy
@@ -89,7 +90,7 @@ class Panda():
         self._initial_joint_position_targets = self._node_handle.get_parameter('initial_joint_angles').value
 
         # TODO: Get kinematic-dynamic computations to be able to compute frame poses from kinematics
-        self._kindyn = KinDynComputations(self._urdf, considered_joints=self._joint_names, velocity_representation=FrameVelocityRepresentation.INERTIAL_FIXED_REPRESENTATION)
+        self._fk = KinDynComputations(self._urdf, considered_joints=self._arm_joint_names, velocity_representation=FrameVelocityRepresentation.INERTIAL_FIXED_REPRESENTATION)
 
         # create containers for the joint position, velocity, effort
         self._joint_states = JointState()
@@ -117,19 +118,20 @@ class Panda():
         #     'panda_finger_joint2': scenario.PID(100, 0, 50),
         # }
 
-        # self._srv_gazebo_pause = self._node_handle.service_client(Empty, )
-        # self._srv_gazebo_pause
+        self._srv_gazebo_pause = self._node_handle.create_client(Empty, '/gazebo/pause_physics')
+        self._srv_gazebo_unpause = self._node_handle.create_client(Empty, '/gazebo/unpause_physics')
+        self._srv_set_model_state = self._node_handle.create_client(SetEntityState, '/gazebo/set_entity_state')
 
     def end_effector_pose(self) -> Odometry:
         """ Returns an end effector odometry message """
 
         # get the end effector pose from the kinematic model
-        end_effector_pose_in_base_frame = self._kindyn.get_relative_transform(self.base_frame(), self.end_effector_frame())
+        end_effector_pose_in_base_frame = self._fk.get_relative_transform(self.base_frame(), self.end_effector_frame())
 
         # Get the end effector Jacobian
-        J = self._kindyn.get_frame_jacobian(self.end_effector_frame())
+        J = self._fk.get_frame_jacobian(self.end_effector_frame())
 
-        end_effector_twist = np.matmul(J, self.joint_states.velocity[:, np.newaxis])
+        end_effector_twist = np.matmul(J, self.joint_states.velocity[:-2, np.newaxis])
 
         end_effector_pose_msg = PoseWithCovariance()
         pose = Pose()
@@ -216,7 +218,8 @@ class Panda():
 
     def reset_model(self) -> np.ndarray:
 
-        # TODO: Reset the model by pausing the Gazebo physics engine, setting the model state, and starting the simulation again
+        # TODO: Reset the model's joints by pausing the Gazebo physics engine, setting the model state, and starting the simulation again. Also reset the joint angle targets
+        # Use forward kinematics to get the end effector position corresponding to the joint angles
 
         return self._initial_joint_position_targets
 
