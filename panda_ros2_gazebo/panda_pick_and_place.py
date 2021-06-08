@@ -10,7 +10,6 @@ import gym_ignition
 from typing import List
 from functools import partial
 from models.panda import Panda, FingersAction
-from scenario import core as scenario_core
 from scipy.spatial.transform import Rotation as R
 
 from nav_msgs.msg import Odometry
@@ -30,7 +29,7 @@ class PandaPickAndPlace(Node):
         self._end_effector_pose_publisher = self.create_publisher(Odometry, self.get_parameter('end_effector_pose').value)
         self._joint_states_subscriber = self.create_subscription(JointState, '/joint_states', self.callback_joint_states, 10)
         self._control_dt = self.get_parameter('control_dt').value
-        self._control_callback_timer = self.create_timer(self._control_dt, self.control_callback)
+        self._control_callback_timer = self.create_timer(self._control_dt, self.joint_group_position_controller_callback)
         self._run_callback = self.create_timer(self._control_dt, self.run)
 
         self._panda = Panda(self.handle)
@@ -42,8 +41,8 @@ class PandaPickAndPlace(Node):
         self._end_effector_target = Odometry()
         self._end_effector_target.header.seq = np.uint32(0)
         self._end_effector_target.header.stamp = rclpy.get_rostime()
-        self._end_effector_target.header.frame_id = self._panda.base_frame()
-        self._end_effector_target.child_frame_id = self._panda.end_effector_frame()
+        self._end_effector_target.header.frame_id = self._panda.base_frame
+        self._end_effector_target.child_frame_id = self._panda.end_effector_frame
         self._end_effector_target.pose.pose.orientation.w = 1.0
 
         # publish the initial end effector target odometry message
@@ -82,7 +81,7 @@ class PandaPickAndPlace(Node):
         self._panda.set_joint_states(joint_states)
         self._joint_states = joint_states
 
-    def control_callback(self) -> None:
+    def joint_group_position_controller_callback(self) -> None:
 
         self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
@@ -90,7 +89,7 @@ class PandaPickAndPlace(Node):
         msg.data = self._joint_targets.copy()
         self._joint_commands_publisher.publish(msg)
 
-    def pid_callback(self) -> None:
+    def joint_group_effort_controller_callback(self) -> None:
 
         self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
