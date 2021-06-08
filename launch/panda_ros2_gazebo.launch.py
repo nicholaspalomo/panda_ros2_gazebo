@@ -61,7 +61,7 @@ def generate_launch_description():
     spawn_controller = launch_ros.actions.Node(
         package="controller_manager",
         executable="spawner.py",
-        arguments=["joint_group_effort_controller", "--param-file", effort_controller_config, "--controller-type", "effort_controllers/JointGroupEffortController"],
+        arguments=["joint_group_position_controller", "--param-file", effort_controller_config, "--controller-type", "effort_controllers/JointGroupPositionController"],
         output="screen",
     )
 
