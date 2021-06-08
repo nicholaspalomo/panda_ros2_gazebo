@@ -100,8 +100,7 @@ class PandaPickAndPlace(Node):
             current_end_effector_pose.twist.twist.linear.z,
             current_end_effector_pose.twist.twist.angular.x,
             current_end_effector_pose.twist.twist.angular.y,
-            current_end_effector_pose.twist.twist.angular.z,
-        ])
+            current_end_effector_pose.twist.twist.angular.z])
         target = np.array([
             self._end_effector_target.pose.pose.position.x,
             self._end_effector_target.pose.pose.position.y,
@@ -113,28 +112,20 @@ class PandaPickAndPlace(Node):
         return np.linalg.norm(masked_current - masked_target) < max_error_pos and \
             np.linalg.norm(velocity[:3]) < max_error_vel
 
+    def move_fingers(self,
+                    action: FingersAction) -> None:
+
+        for i, joint_name in enumerate(self._panda.joint_names()):
+            if self._panda.finger_joint_limits().get(joint_name) is not None:
+                if action is FingersAction.OPEN:
+                    self._joint_targets[i] = self._panda.finger_joint_limits()[joint_name][1]
+
+                if action is FingersAction.CLOSE:
+                    self._joint_targets[i] = self._panda.finger_joint_limits()[joint_name][0]
 
     # def get_unload_position(bucket: scenario_core.Model) -> np.ndarray:
 
     #     return bucket.base_position() + np.array([0, 0, 0.3])
-
-
-    def move_fingers(self,
-                    panda: models.panda.Panda,
-                    action: FingersAction) -> None:
-
-        # Get the joints of the fingers
-        finger1 = panda.get_joint(joint_name="panda_finger_joint1")
-        finger2 = panda.get_joint(joint_name="panda_finger_joint2")
-
-        if action is FingersAction.OPEN:
-            finger1.set_position_target(position=finger1.position_limit().max)
-            finger2.set_position_target(position=finger2.position_limit().max)
-
-        if action is FingersAction.CLOSE:
-            finger1.set_position_target(position=finger1.position_limit().min)
-            finger2.set_position_target(position=finger2.position_limit().min)
-
 
     # def insert_bucket(world: scenario_gazebo.World) -> scenario_gazebo.Model:
 

@@ -10,4 +10,5 @@ import numpy
 
 max_float = float(numpy.finfo(numpy.float32).max)
 
-from . import panda
+from . import Panda
+from . import FingersAction

@@ -3,11 +3,9 @@
 # GNU Lesser General Public License v2.1 or any later version.
 
 import os
-import sys
 from panda_ros2_gazebo.panda_ros2_gazebo.python.gym_ignition.rbd.idyntree.helpers import FrameVelocityRepresentation
 
 from panda_ros2_gazebo.panda_ros2_gazebo.python.gym_ignition.rbd.idyntree.kindyncomputations import KinDynComputations
-sys.path.append('.')
 
 import enum
 import numpy as np
@@ -67,6 +65,7 @@ class Panda():
         self._joint_names = []
         self._arm_joint_names = []
         self._finger_joint_names = [] # fingers are excluded from the IK
+        self._finger_joint_limits = []
 
         # Get the joints to exclude from the IK optimization
         self._exclude_tag = self._node_handle.get_parameter('exclude_tag').value
@@ -80,8 +79,17 @@ class Panda():
             # Get the names of joints to be included in optimization. Joint names containing the 'exclude tag' (e.g. the fingers) should not be considered by the IK algorithm
             if self._exclude_tag in joint_name:
                 self._finger_joint_names.append(joint_name)
+
+                # Get the joint limits for the fingers (prismatic)
+                min_lim = 0
+                max_lim = 0
+                joint_obj = self._articulated_system.getJoint(joint_name)
+                if not joint_obj.getPosLimits(joint_idx, min_lim, max_lim):
+                    ValueError("Failed to fetch finger joint limits.")
+                self._finger_joint_limits.append([min_lim, max_lim])
             else:
                 self._arm_joint_names.append(joint_name)
+        self._finger_joint_limits = dict(zip(self._finger_joint_names, self._finger_joint_limits))
 
         # Get the reduced articulated system with the excluded joints and linkage branches removed
         self._reduced_articulated_system = self._get_model_loader(self._urdf, self._arm_joint_names).model()
@@ -100,23 +108,8 @@ class Panda():
         self._end_effector_odom.header.frame_id = self.base_frame()
         self._end_effector_odom.child_frame_id = self.end_effector_frame()
 
-        # create the inverse kinematics model
+        # Create the inverse kinematics model
         self._ik = self.get_panda_ik(self._arm_joint_names)
-
-        # TODO: Get the PID gains from the parameter server
-        # From:
-        # https://github.com/mkrizmancic/franka_gazebo/blob/master/config/default.yaml
-        # pid_gains_1000hz = {
-        #     'panda_joint1': scenario.PID(50,    0,  20),
-        #     'panda_joint2': scenario.PID(10000, 0, 500),
-        #     'panda_joint3': scenario.PID(100,   0,  10),
-        #     'panda_joint4': scenario.PID(1000,  0,  50),
-        #     'panda_joint5': scenario.PID(100,   0,  10),
-        #     'panda_joint6': scenario.PID(100,   0,  10),
-        #     'panda_joint7': scenario.PID(10,  0.5, 0.1),
-        #     'panda_finger_joint1': scenario.PID(100, 0, 50),
-        #     'panda_finger_joint2': scenario.PID(100, 0, 50),
-        # }
 
         self._srv_gazebo_pause = self._node_handle.create_client(Empty, '/gazebo/pause_physics')
         self._srv_gazebo_unpause = self._node_handle.create_client(Empty, '/gazebo/unpause_physics')
@@ -257,6 +250,10 @@ class Panda():
     def joint_names(self) -> List[str]:
 
         return self._joint_names
+
+    def finger_joint_limits(self):
+
+        return self._finger_joint_limits
 
     def base_frame(self) -> str:
 
