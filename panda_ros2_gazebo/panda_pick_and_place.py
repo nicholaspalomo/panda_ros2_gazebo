@@ -30,7 +30,8 @@ class PandaPickAndPlace(Node):
                 ('model_file', None),
                 ('base_frame', None),
                 ('end_effector_frame', None),
-                ('exclude_tag', None),
+                ('arm_joint_tag', None),
+                ('finger_joint_tag', None),
                 ('initial_joint_angles', None)
             ]
         )
@@ -94,18 +95,18 @@ class PandaPickAndPlace(Node):
 
     def joint_group_position_controller_callback(self) -> None:
 
-        self._joint_targets = self._panda.solve_ik(self._end_effector_target)
+        self._joint_targets_arm_only = self._panda.solve_ik(self._end_effector_target)
 
         msg = Float64MultiArray()
-        msg.data = self._joint_targets.copy()
+        msg.data = np.vstack((self._joint_targets_arm_only.copy(), np.zeros(2))) # temporary placeholder for arm joints + finger joints
         self._joint_commands_publisher.publish(msg)
 
     def joint_group_effort_controller_callback(self) -> None:
 
-        self._joint_targets = self._panda.solve_ik(self._end_effector_target)
+        self._joint_targets_arm_only = self._panda.solve_ik(self._end_effector_target)
 
         # compute the effort from 
-        err = self._joint_targets - self._joint_states.position # TODO: Populate this in the joint_states callback
+        err = self._joint_targets_arm_only - self._joint_states.position # TODO: Populate this in the joint_states callback
         self._int_err += self._control_dt * err
         deriv_err = (err - self._err) / self._control_dt
 
@@ -152,10 +153,10 @@ class PandaPickAndPlace(Node):
         for i, joint_name in enumerate(self._panda.joint_names):
             if self._panda.finger_joint_limits().get(joint_name) is not None:
                 if action is FingersAction.OPEN:
-                    self._joint_targets[i] = self._panda.finger_joint_limits[joint_name][1]
+                    self._joint_targets_arm_only[i] = self._panda.finger_joint_limits[joint_name][1]
 
                 if action is FingersAction.CLOSE:
-                    self._joint_targets[i] = self._panda.finger_joint_limits[joint_name][0]
+                    self._joint_targets_arm_only[i] = self._panda.finger_joint_limits[joint_name][0]
 
     # def get_unload_position(bucket: scenario_core.Model) -> np.ndarray:
 

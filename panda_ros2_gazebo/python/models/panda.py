@@ -1,4 +1,4 @@
-# Copyright (C) 2020 Istituto Italiano di Tecnologia (IIT). All rights reserved.
+# Copyright (C) 2021 Bosch LLC CR, North America. All rights reserved.
 # This software may be modified and distributed under the terms of the
 # GNU Lesser General Public License v2.1 or any later version.
 
@@ -24,6 +24,8 @@ from gazebo_msgs.srv import SetEntityState
 from std_srvs.srv import Empty
 
 import rclpy
+
+# TODO: rather than using joint tags from the params.yaml, get the joint type directly from the iDynTree library
 class FingersAction(enum.Enum):
 
     OPEN = enum.auto()
@@ -61,6 +63,8 @@ class Panda():
         
         self._articulated_system = self._get_model_loader(self._urdf).model()
 
+        self._node_handle.get_logger().info('NUMBER OF JOINTS: {}'.format(self._articulated_system.getNrOfJoints()))
+
         # Get the joint names directly from the iDynTree model
         self._joint_names = []
         self._arm_joint_names = {}
@@ -68,16 +72,19 @@ class Panda():
         self._finger_joint_limits = []
 
         # Get the joints to exclude from the IK optimization
-        self._exclude_tag = self._node_handle.get_parameter('exclude_tag').value
+        self._finger_joint_tag = self._node_handle.get_parameter('finger_joint_tag').value
+        self._arm_joint_tag = self._node_handle.get_parameter('arm_joint_tag').value
 
         for joint_idx in range(self._articulated_system.getNrOfJoints()):
             joint_name = self._articulated_system.getJointName(joint_idx)
 
-            # Get the joint names from the model
-            self._joint_names.append(joint_name)
+            self._node_handle.get_logger().info('JOINT NAME: %s' % joint_name)
 
             # Get the names of joints to be included in optimization. Joint names containing the 'exclude tag' (e.g. the fingers) should not be considered by the IK algorithm
-            if self._exclude_tag in joint_name:
+            if self._finger_joint_tag in joint_name:
+                # Get the joint names from the model
+                self._joint_names.append(joint_name)
+
                 self._finger_joint_names.add({joint_idx : joint_name})
 
                 # Get the joint limits for the fingers (prismatic)
@@ -87,7 +94,10 @@ class Panda():
                 if not joint_obj.getPosLimits(joint_idx, min_lim, max_lim):
                     ValueError("Failed to fetch finger joint limits.")
                 self._finger_joint_limits.append([min_lim, max_lim])
-            else:
+            elif self._arm_joint_tag in joint_name:
+                # Get the joint names from the model
+                self._joint_names.append(joint_name)
+
                 self._arm_joint_names.add({joint_idx, joint_name})
         self._finger_joint_limits = dict(zip(self._finger_joint_names, self._finger_joint_limits))
 
@@ -109,7 +119,7 @@ class Panda():
         self._end_effector_odom.pose.pose.orientation.w = 1.0 # so that orientation is a unit quaternion
 
         # Create the inverse kinematics model
-        self._ik = self._get_panda_ik(list(self._arm_joint_names.values()))
+        self._ik = self._get_panda_ik(self.joint_names)
 
         self._srv_gazebo_pause = self._node_handle.create_client(Empty, '/gazebo/pause_physics')
         self._srv_gazebo_unpause = self._node_handle.create_client(Empty, '/gazebo/unpause_physics')
@@ -283,7 +293,11 @@ class Panda():
     @property
     def model_file(self) -> str:
 
-        return os.path.join(os.getcwd(), 'src', self._node_handle.get_parameter('model_file').value)
+        model_file = os.path.join(os.getcwd(), self._node_handle.get_parameter('model_file').value)
+
+        self._node_handle.get_logger().info('MODEL URDF: {}'.format(model_file))
+
+        return model_file
 
     def _get_model_loader(self, urdf, joint_serialization=[]):
 
@@ -298,5 +312,7 @@ class Panda():
 
         if not ok_load:
             raise RuntimeError("Failed to load model")
+        else:
+            self._node_handle.get_logger().info('MODEL SUCCESSFULLY LOADED: {}'.format(urdf))
 
         return model_loader

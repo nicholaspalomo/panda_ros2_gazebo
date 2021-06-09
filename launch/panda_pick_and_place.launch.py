@@ -29,6 +29,7 @@ def generate_launch_description():
         parameters=[
             parameter_file_path
         ],
+        output='screen' 
     )
 
     return launch.LaunchDescription([
