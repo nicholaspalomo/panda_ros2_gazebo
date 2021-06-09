@@ -60,6 +60,9 @@ class Panda():
                 raise FileNotFoundError(self._urdf)
         else:
             self._urdf = model_file
+
+        # Get the model loader
+        self._model_loader = idt.ModelLoader()
         
         self._articulated_system = self._get_model_loader(self._urdf).model()
 
@@ -78,31 +81,26 @@ class Panda():
         for joint_idx in range(self._articulated_system.getNrOfJoints()):
             joint_name = self._articulated_system.getJointName(joint_idx)
 
-            self._node_handle.get_logger().info('JOINT NAME: %s' % joint_name)
-
             # Get the names of joints to be included in optimization. Joint names containing the 'exclude tag' (e.g. the fingers) should not be considered by the IK algorithm
-            if self._finger_joint_tag in joint_name:
-                # Get the joint names from the model
-                self._joint_names.append(joint_name)
+            joint_obj = self._articulated_system.getJoint(joint_idx)
+            if joint_obj.enablePosLimits(True): # can't enable joint limits for a fixed joint; so this method will return 'False'
+                self._node_handle.get_logger().info('JOINT NAME: %s' % joint_name)
+                if self._finger_joint_tag in joint_name:
+                    # Get the joint names from the model
+                    self._joint_names.append(joint_name)
 
-                self._finger_joint_names.add({joint_idx : joint_name})
+                    self._finger_joint_names[joint_idx] = joint_name
 
-                # Get the joint limits for the fingers (prismatic)
-                min_lim = 0
-                max_lim = 0
-                joint_obj = self._articulated_system.getJoint(joint_name)
-                if not joint_obj.getPosLimits(joint_idx, min_lim, max_lim):
-                    ValueError("Failed to fetch finger joint limits.")
-                self._finger_joint_limits.append([min_lim, max_lim])
-            elif self._arm_joint_tag in joint_name:
-                # Get the joint names from the model
-                self._joint_names.append(joint_name)
+                    # Get the joint limits for the fingers (prismatic)
+                    joint_obj = self._articulated_system.getJoint(joint_idx)
+                    self._finger_joint_limits.append([joint_obj.getMinPosLimit(joint_idx), joint_obj.getMaxPosLimit(joint_idx)])
+                elif self._arm_joint_tag in joint_name:
+                    # Get the joint names from the model
+                    self._joint_names.append(joint_name)
 
-                self._arm_joint_names.add({joint_idx, joint_name})
+                    self._arm_joint_names[joint_idx] = joint_name
+                    
         self._finger_joint_limits = dict(zip(self._finger_joint_names, self._finger_joint_limits))
-
-        # Get the reduced articulated system with the excluded joints and linkage branches removed
-        self._reduced_articulated_system = self._get_model_loader(self._urdf, list(self._arm_joint_names.values())).model()
 
         # Initial joint targets
         self._initial_joint_position_targets = self._node_handle.get_parameter('initial_joint_angles').value
@@ -300,19 +298,16 @@ class Panda():
         return model_file
 
     def _get_model_loader(self, urdf, joint_serialization=[]):
-
-        # Get the model loader
-        model_loader = idt.ModelLoader()
         
         # If the joint serialization function parameter is not empty, pass it as an argument to the model loader
         if joint_serialization:
-            ok_load = model_loader.loadModelFromFile(urdf, joint_serialization)
+            ok_load = self._model_loader.loadModelFromFile(urdf, joint_serialization)
         else:
-            ok_load = model_loader.loadModelFromFile(urdf)
+            ok_load = self._model_loader.loadModelFromFile(urdf)
 
         if not ok_load:
             raise RuntimeError("Failed to load model")
         else:
             self._node_handle.get_logger().info('MODEL SUCCESSFULLY LOADED: {}'.format(urdf))
 
-        return model_loader
+        return self._model_loader
