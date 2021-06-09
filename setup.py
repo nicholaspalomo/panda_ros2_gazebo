@@ -1,20 +1,31 @@
 
 from glob import glob
-
+import os
 from setuptools import setup
 
 package_name = "panda_ros2_gazebo"
+
+# build a list of the data files
+data_files = []
+data_files.append(("share/ament_index/resource_index/packages", ["resource/" + package_name]))
+data_files.append(("share/" + package_name, ["package.xml"]))
+data_files.append(("share/" + package_name, glob("launch/*.launch.py", recursive=True)))
+
+def package_files(directory, data_files):
+    for (path, directories, filenames) in os.walk(directory):
+        for filename in filenames:
+            data_files.append(("share/" + package_name + "/" + path, glob(path + "/**/*.*", recursive=True)))
+    return data_files
+
+data_files = package_files('description/', data_files)
+data_files = package_files('config/', data_files)
+data_files = package_files('rviz/', data_files)
 
 setup(
     name=package_name,
     version="0.0.1",
     packages=[package_name],
-    data_files=[
-        ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
-        ("share/" + package_name, ["package.xml"]),
-        ("share/" + package_name, glob("launch/*.launch.py")),
-        ("share/" + package_name + "/config", glob("config/*.*")),
-    ],
+    data_files=data_files,
     install_requires=["setuptools"],
     zip_safe=True,
     author="njpalomo",
