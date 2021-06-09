@@ -18,23 +18,40 @@ class PandaPickAndPlace(Node):
     def __init__(self):
         super().__init__('pick_and_place')
 
-        self._joint_commands_publisher = self.create_publisher(Float64MultiArray, self.get_parameter('joint_control_topic').value)
-        self._end_effector_target_publisher = self.create_publisher(Odometry, self.get_parameter('end_effector_target_topic').value)
-        self._end_effector_pose_publisher = self.create_publisher(Odometry, self.get_parameter('end_effector_pose').value)
+        # Declare parameters that are loaded from params.yaml to the parameter server
+        self.declare_parameters(
+            namespace='',
+            parameters=[
+                ('control_dt', None),
+                ('joint_controller_name', None),
+                ('joint_control_topic', None),
+                ('end_effector_target_topic', None),
+                ('end_effector_pose_topic', None),
+                ('model_file', None),
+                ('base_frame', None),
+                ('end_effector_frame', None),
+                ('exclude_tag', None),
+                ('initial_joint_angles', None)
+            ]
+        )
+
+        # Create joint commands, end effector publishers; subscribe to joint state
+        self._joint_commands_publisher = self.create_publisher(Float64MultiArray, self.get_parameter('joint_control_topic').value, 10)
+        self._end_effector_target_publisher = self.create_publisher(Odometry, self.get_parameter('end_effector_target_topic').value, 10)
+        self._end_effector_pose_publisher = self.create_publisher(Odometry, self.get_parameter('end_effector_pose_topic').value, 10)
         self._joint_states_subscriber = self.create_subscription(JointState, '/joint_states', self.callback_joint_states, 10)
         self._control_dt = self.get_parameter('control_dt').value
         self._control_callback_timer = self.create_timer(self._control_dt, self.joint_group_position_controller_callback)
         self._run_callback = self.create_timer(self._control_dt, self.run)
 
-        self._panda = Panda(self.handle)
+        self._panda = Panda(self)
 
         self._num_joints = self._panda.num_joints
         self._joint_targets = self._panda.reset_model()
         self._joint_states = JointState()
 
         self._end_effector_target = Odometry()
-        self._end_effector_target.header.seq = np.uint32(0)
-        self._end_effector_target.header.stamp = rclpy.get_rostime()
+        self._end_effector_target.header.stamp = self.get_clock().now().to_msg()
         self._end_effector_target.header.frame_id = self._panda.base_frame
         self._end_effector_target.child_frame_id = self._panda.end_effector_frame
         self._end_effector_target.pose.pose.orientation.w = 1.0
@@ -148,8 +165,7 @@ class PandaPickAndPlace(Node):
 
         if self.end_effector_reached():
             # sample a new end effector target
-            self._end_effector_target.header.seq += 1
-            self._end_effector_target.header.stamp = rclpy.get_rostime()
+            self._end_effector_target.header.stamp = self.get_clock().now().to_msg()
             self._end_effector_target.pose.pose.position.x = np.random.uniform(low=0.25, high=0.75)
             self._end_effector_target.pose.pose.position.y = np.random.uniform(low=0.25, high=0.75)
             self._end_effector_target.pose.pose.position.z = np.random.uniform(low=0.25, high=0.75)

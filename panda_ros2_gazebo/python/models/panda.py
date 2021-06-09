@@ -41,13 +41,13 @@ class Panda():
 
         # Initial pose
         initial_pose = Transform()
-        initial_pose.translation.x = position[0]
-        initial_pose.translation.y = position[1]
-        initial_pose.translation.z = position[2]
-        initial_pose.rotation.x = orientation[0]
-        initial_pose.rotation.y = orientation[1]
-        initial_pose.rotation.z = orientation[2]
-        initial_pose.rotation.w = orientation[3]
+        initial_pose.translation.x = np.float_(position[0])
+        initial_pose.translation.y = np.float_(position[1])
+        initial_pose.translation.z = np.float_(position[2])
+        initial_pose.rotation.x = np.float_(orientation[0])
+        initial_pose.rotation.y = np.float_(orientation[1])
+        initial_pose.rotation.z = np.float_(orientation[2])
+        initial_pose.rotation.w = np.float_(orientation[3])
         self._base_position = initial_pose.translation
         self._base_orientation = initial_pose.rotation
 
@@ -63,8 +63,8 @@ class Panda():
 
         # Get the joint names directly from the iDynTree model
         self._joint_names = []
-        self._arm_joint_names = []
-        self._finger_joint_names = [] # fingers are excluded from the IK
+        self._arm_joint_names = {}
+        self._finger_joint_names = {} # fingers are excluded from the IK
         self._finger_joint_limits = []
 
         # Get the joints to exclude from the IK optimization
@@ -78,7 +78,7 @@ class Panda():
 
             # Get the names of joints to be included in optimization. Joint names containing the 'exclude tag' (e.g. the fingers) should not be considered by the IK algorithm
             if self._exclude_tag in joint_name:
-                self._finger_joint_names.append(joint_name)
+                self._finger_joint_names.add({joint_idx : joint_name})
 
                 # Get the joint limits for the fingers (prismatic)
                 min_lim = 0
@@ -88,29 +88,28 @@ class Panda():
                     ValueError("Failed to fetch finger joint limits.")
                 self._finger_joint_limits.append([min_lim, max_lim])
             else:
-                self._arm_joint_names.append(joint_name)
+                self._arm_joint_names.add({joint_idx, joint_name})
         self._finger_joint_limits = dict(zip(self._finger_joint_names, self._finger_joint_limits))
 
         # Get the reduced articulated system with the excluded joints and linkage branches removed
-        self._reduced_articulated_system = self._get_model_loader(self._urdf, self._arm_joint_names).model()
+        self._reduced_articulated_system = self._get_model_loader(self._urdf, list(self._arm_joint_names.values())).model()
 
         # Initial joint targets
         self._initial_joint_position_targets = self._node_handle.get_parameter('initial_joint_angles').value
 
         # TODO: Get kinematic-dynamic computations to be able to compute frame poses from kinematics
-        self._fk = KinDynComputations(self._urdf, considered_joints=self._arm_joint_names, velocity_representation=FrameVelocityRepresentation.INERTIAL_FIXED_REPRESENTATION)
+        self._fk = KinDynComputations(self._urdf, considered_joints=list(self._arm_joint_names.values()), velocity_representation=FrameVelocityRepresentation.INERTIAL_FIXED_REPRESENTATION)
 
         # create containers for the joint position, velocity, effort
         self._joint_states = JointState()
         self._end_effector_odom = Odometry() # TODO: Get the end effector odometry directly from the IK model
-        self._end_effector_odom.header.seq = np.uint32(0)
-        self._end_effector_odom.header.stamp = rclpy.get_rostime()
-        self._end_effector_odom.header.frame_id = self.base_frame()
-        self._end_effector_odom.child_frame_id = self.end_effector_frame()
+        self._end_effector_odom.header.stamp = self._node_handle.get_clock().now().to_msg()
+        self._end_effector_odom.header.frame_id = self.base_frame
+        self._end_effector_odom.child_frame_id = self.end_effector_frame
         self._end_effector_odom.pose.pose.orientation.w = 1.0 # so that orientation is a unit quaternion
 
         # Create the inverse kinematics model
-        self._ik = self.get_panda_ik(self._arm_joint_names)
+        self._ik = self._get_panda_ik(list(self._arm_joint_names.values()))
 
         self._srv_gazebo_pause = self._node_handle.create_client(Empty, '/gazebo/pause_physics')
         self._srv_gazebo_unpause = self._node_handle.create_client(Empty, '/gazebo/unpause_physics')
@@ -159,9 +158,8 @@ class Panda():
         end_effector_twist_msg.twist = twist
 
         self._end_effector_odom.twist = end_effector_twist_msg
-
-        self._end_effector_odom.header.seq += 1
-        self._end_effector_odom.header.stamp = rclpy.get_rostime()
+        
+        self._end_effector_odom.header.stamp = self._node_handle.get_clock().now().to_msg()
 
         return self._end_effector_odom
 
@@ -189,7 +187,7 @@ class Panda():
                 self.base_orientation.y, 
                 self.base_orientation.z, 
                 self.base_orientation.w]),
-            joint_configuration=self.joint_positions)
+            joint_configuration=np.array([self.joint_positions[i] for i in self._arm_joint_names.keys()]))
 
         # Add the cartesian target of the end effector
         ik.add_target(frame_name=self.end_effector_frame,
@@ -231,7 +229,7 @@ class Panda():
     @property
     def num_arm_joints(self) -> int:
 
-        return len(self._arm_joint_names)
+        return len(list(self._arm_joint_names.values()))
 
     @property
     def num_end_effector_joints(self) -> int:
@@ -285,7 +283,7 @@ class Panda():
     @property
     def model_file(self) -> str:
 
-        return self._node_handle.get_parameter('model_file').value
+        return os.path.join(os.getcwd(), 'src', self._node_handle.get_parameter('model_file').value)
 
     def _get_model_loader(self, urdf, joint_serialization=[]):
 

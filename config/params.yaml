@@ -1,11 +1,11 @@
 panda_pick_and_place:
   ros__parameters:
     control_dt: 0.001 # 1 kHz
-    joint_controller_name: 'effort_group_position_controller'
-    joint_control_topic: 'effort_group_position_controller/commands'
+    joint_controller_name: 'joint_group_position_controller'
+    joint_control_topic: 'joint_group_position_controller/commands'
     end_effector_target_topic: 'end_effector_target_pose'
     end_effector_pose_topic: 'end_effector_pose'
-    model_file: 'description/models/panda/panda.urdf'
+    model_file: 'panda_ros2_gazebo/description/models/panda/panda.urdf'
     base_frame: 'panda_link0'
     end_effector_frame: 'end_effector_frame'
     exclude_tag: 'finger' # tag for the joints to exclude from the IK optimization
