@@ -43,19 +43,20 @@ class PandaPickAndPlace(Node):
         self._joint_states_subscriber = self.create_subscription(JointState, '/joint_states', self.callback_joint_states, 10)
         self._control_dt = self.get_parameter('control_dt').value
         self._control_callback_timer = self.create_timer(self._control_dt, self.joint_group_position_controller_callback)
-        self._run_callback = self.create_timer(self._control_dt, self.run)
 
+        # TODO: Implement logic to wait until first joint states measurement is received
         self._panda = Panda(self)
 
-        self._num_joints = self._panda.num_joints
-        self._joint_targets = self._panda.reset_model()
-        self._joint_states = JointState()
-
+        # Sample an end effector target
         self._end_effector_target = Odometry()
-        self._end_effector_target.header.stamp = self.get_clock().now().to_msg()
-        self._end_effector_target.header.frame_id = self._panda.base_frame
-        self._end_effector_target.child_frame_id = self._panda.end_effector_frame
-        self._end_effector_target.pose.pose.orientation.w = 1.0
+        self.sample_end_effector_target()
+        self._joint_targets = self._panda.solve_ik(self._end_effector_target)
+
+        self._num_joints = self._panda.num_joints
+        self._joint_states = JointState()
+        self._joint_states.position = [0.] * self._num_joints
+        self._joint_states.velocity = [0.] * self._num_joints
+        self._joint_states.effort = [0.] * self._num_joints
 
         # publish the initial end effector target odometry message
         self._end_effector_target_publisher
@@ -93,20 +94,30 @@ class PandaPickAndPlace(Node):
         self._panda.set_joint_states(joint_states)
         self._joint_states = joint_states
 
+        self.get_logger().info('JOINT POSITIONS: {}'.format(self._joint_states.position))
+
     def joint_group_position_controller_callback(self) -> None:
 
-        self._joint_targets_arm_only = self._panda.solve_ik(self._end_effector_target)
+        if self.end_effector_reached():
+            # sample a new end effector target
+            self.sample_end_effector_target()
+            self._joint_targets = self._panda.solve_ik(self._end_effector_target)
+
+        self.get_logger().info('JOINT TARGETS: {}'.format(self._joint_targets))
 
         msg = Float64MultiArray()
-        msg.data = np.vstack((self._joint_targets_arm_only.copy(), np.zeros(2))) # temporary placeholder for arm joints + finger joints
+        msg.data = list(self._joint_targets)
         self._joint_commands_publisher.publish(msg)
 
     def joint_group_effort_controller_callback(self) -> None:
-
-        self._joint_targets_arm_only = self._panda.solve_ik(self._end_effector_target)
+        
+        if self.end_effector_reached():
+            # sample a new end effector target
+            self.sample_end_effector_target()
+            self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
         # compute the effort from 
-        err = self._joint_targets_arm_only - self._joint_states.position # TODO: Populate this in the joint_states callback
+        err = self._joint_targets - self._joint_states.position
         self._int_err += self._control_dt * err
         deriv_err = (err - self._err) / self._control_dt
 
@@ -117,10 +128,9 @@ class PandaPickAndPlace(Node):
         msg = Float64MultiArray()
         msg.data = self._effort.copy()
         self._joint_commands_publisher.publish(msg)
-        # self.get_logger().info('Publishing: "%s"' % msg.data)
 
     def end_effector_reached(self,
-                            max_error_pos: float = 0.01,
+                            max_error_pos: float = 0.1,
                             max_error_vel: float = 0.5,
                             mask: np.ndarray = np.array([1., 1., 1.])) -> bool:
         
@@ -144,6 +154,12 @@ class PandaPickAndPlace(Node):
         masked_target = mask * target
         masked_current = mask * position
 
+        self.get_logger().info('END EFFECTOR POSITION: {}'.format(masked_current))
+        self.get_logger().info('END EFFECTOR POSITION TARGET: {}'.format(masked_target))
+        self.get_logger().info('TRANSLATIONAL POSITION ERR: {}'.format(masked_current - masked_target))
+        self.get_logger().info('END EFFECTOR TRANSLATIONAL VELOCITY NORM: {}'.format(np.linalg.norm(velocity[:3])))
+        self.get_logger().info('JOINT POSITION ERROR: {}'.format(self._joint_targets - np.array(self._joint_states.position)))
+
         return np.linalg.norm(masked_current - masked_target) < max_error_pos and \
             np.linalg.norm(velocity[:3]) < max_error_vel
 
@@ -153,43 +169,37 @@ class PandaPickAndPlace(Node):
         for i, joint_name in enumerate(self._panda.joint_names):
             if self._panda.finger_joint_limits().get(joint_name) is not None:
                 if action is FingersAction.OPEN:
-                    self._joint_targets_arm_only[i] = self._panda.finger_joint_limits[joint_name][1]
+                    self._joint_targets[i] = self._panda.finger_joint_limits[joint_name][1]
 
                 if action is FingersAction.CLOSE:
-                    self._joint_targets_arm_only[i] = self._panda.finger_joint_limits[joint_name][0]
+                    self._joint_targets[i] = self._panda.finger_joint_limits[joint_name][0]
 
-    # def get_unload_position(bucket: scenario_core.Model) -> np.ndarray:
+    def sample_end_effector_target(self) -> Odometry:
 
-    #     return bucket.base_position() + np.array([0, 0, 0.3])
+        self._end_effector_target.header.stamp = self.get_clock().now().to_msg()
+        self._end_effector_target.pose.pose.position.x = np.random.uniform(low=0.25, high=0.6)
+        self._end_effector_target.pose.pose.position.y = np.random.uniform(low=0.25, high=0.6)
+        self._end_effector_target.pose.pose.position.z = np.random.uniform(low=0.25, high=0.6)
 
-    def run(self):
+        r = np.random.uniform(low=-np.pi/4, high=np.pi/4)
+        p = np.random.uniform(low=-np.pi/4, high=np.pi/4)
+        y = np.random.uniform(low=-np.pi/4, high=np.pi/4)
 
-        if self.end_effector_reached():
-            # sample a new end effector target
-            self._end_effector_target.header.stamp = self.get_clock().now().to_msg()
-            self._end_effector_target.pose.pose.position.x = np.random.uniform(low=0.25, high=0.75)
-            self._end_effector_target.pose.pose.position.y = np.random.uniform(low=0.25, high=0.75)
-            self._end_effector_target.pose.pose.position.z = np.random.uniform(low=0.25, high=0.75)
+        quat_xyzw = R.from_euler('xyz', [r, p, y], degrees=False).as_quat()
+        self._end_effector_target.pose.pose.orientation.x = quat_xyzw[0]
+        self._end_effector_target.pose.pose.orientation.x = quat_xyzw[1]
+        self._end_effector_target.pose.pose.orientation.x = quat_xyzw[2]
+        self._end_effector_target.pose.pose.orientation.x = quat_xyzw[3]
 
-            r = np.random.uniform(low=-np.pi/4, high=np.pi/4)
-            p = np.random.uniform(low=-np.pi/4, high=np.pi/4)
-            y = np.random.uniform(low=-np.pi/4, high=np.pi/4)
+        print("End effector target set to [x, y z]=[{}, {}, {}], [r, p , y]=[{}, {}, {}]".format(
+            self._end_effector_target.pose.pose.position.x,
+            self._end_effector_target.pose.pose.position.y,
+            self._end_effector_target.pose.pose.position.z,
+            r, p, y
+        ))
 
-            quat_xyzw = R.from_euler('xyz', [r, p, y], from_degrees=False)
-            self._end_effector_target.pose.pose.orientation.x = quat_xyzw[0]
-            self._end_effector_target.pose.pose.orientation.x = quat_xyzw[1]
-            self._end_effector_target.pose.pose.orientation.x = quat_xyzw[2]
-            self._end_effector_target.pose.pose.orientation.x = quat_xyzw[3]
-
-            print("End effector target set to [x, y z]=[{}, {}, {}], [r, p , y]=[{}, {}, {}]".format(
-                self._end_effector_target.pose.pose.position.x,
-                self._end_effector_target.pose.pose.position.y,
-                self._end_effector_target.pose.pose.position.z,
-                r, p, y
-            ))
-
-            self._end_effector_target_publisher.publish(self._end_effector_target)
-            self._end_effector_pose_publisher.publish(self._panda.end_effector_pose())
+        self._end_effector_target_publisher.publish(self._end_effector_target)
+        self._end_effector_pose_publisher.publish(self._panda.end_effector_pose())
 
 def main(args=None):
     rclpy.init(args=args)

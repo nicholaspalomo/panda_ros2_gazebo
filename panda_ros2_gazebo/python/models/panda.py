@@ -23,8 +23,6 @@ from gazebo_msgs.msg import EntityState
 from gazebo_msgs.srv import SetEntityState
 from std_srvs.srv import Empty
 
-import rclpy
-
 # TODO: rather than using joint tags from the params.yaml, get the joint type directly from the iDynTree library
 class FingersAction(enum.Enum):
 
@@ -99,7 +97,7 @@ class Panda():
                     self._joint_names.append(joint_name)
 
                     self._arm_joint_names[joint_idx] = joint_name
-                    
+
         self._finger_joint_limits = dict(zip(self._finger_joint_names, self._finger_joint_limits))
 
         # Initial joint targets
@@ -110,7 +108,11 @@ class Panda():
 
         # create containers for the joint position, velocity, effort
         self._joint_states = JointState()
-        self._end_effector_odom = Odometry() # TODO: Get the end effector odometry directly from the IK model
+        self._joint_states.position = self._initial_joint_position_targets
+        self._joint_states.velocity = [0.] * len(self._joint_names)
+        self._joint_states.effort = [0.] * len(self._joint_names)
+
+        self._end_effector_odom = Odometry()
         self._end_effector_odom.header.stamp = self._node_handle.get_clock().now().to_msg()
         self._end_effector_odom.header.frame_id = self.base_frame
         self._end_effector_odom.child_frame_id = self.end_effector_frame
@@ -126,13 +128,35 @@ class Panda():
     def end_effector_pose(self) -> Odometry:
         """ Returns an end effector odometry message """
 
+        # Update the IK model
+        self.update_config(self._ik)
+
         # get the end effector pose from the kinematic model
         end_effector_pose_in_base_frame = self._fk.get_relative_transform(self.base_frame, self.end_effector_frame)
 
         # Get the end effector Jacobian
         J = self._fk.get_frame_jacobian(self.end_effector_frame)
 
-        end_effector_twist = np.matmul(J, self._joint_states.velocity[:-2, np.newaxis])
+        self._node_handle.get_logger().info('END EFFECTOR JACOBIAN: {}'.format(J))
+        
+        # compose the joint velocity vector for determining the end effector pose using the end effector Jacobian
+        num_joints = self._articulated_system.getNrOfJoints() + 1 # '+1' here because this includes the fix joint between the robot and the 'world', I guess...
+        joint_velocities = np.zeros((num_joints,))
+        j = 0
+        for i in range(num_joints):
+            if i in self._arm_joint_names.keys():
+                joint_velocities[i] = self._joint_states.velocity[j]
+                j += 1
+
+            if i in self._finger_joint_names.keys():
+                joint_velocities[i] = self._joint_states.velocity[j]
+                j += 1
+
+        self._node_handle.get_logger().info('JOINT VELOCITIES: {}'.format(joint_velocities))
+
+        end_effector_twist = np.matmul(J, joint_velocities[:, np.newaxis]).squeeze()
+
+        self._node_handle.get_logger().info('END EFFECTOR TWIST: {}'.format(end_effector_twist))
 
         end_effector_pose_msg = PoseWithCovariance()
         pose = Pose()
@@ -140,8 +164,10 @@ class Panda():
         pose.position.y = end_effector_pose_in_base_frame[1, -1]
         pose.position.z = end_effector_pose_in_base_frame[2, -1]
 
-        quat = R.from_matrix(end_effector_pose_in_base_frame[:3, :3])
-        quat = R.as_quat()
+        quat = R.from_matrix(end_effector_pose_in_base_frame[:3, :3]).as_quat()
+
+        self._node_handle.get_logger().info('END EFFECTOR QUATERNION: {}'.format(quat))
+
         pose.orientation.x = quat[0]
         pose.orientation.y = quat[1]
         pose.orientation.z = quat[2]
@@ -187,6 +213,17 @@ class Panda():
                     constraints_tolerance=1E-8,
                     base_frame=self.base_frame)
 
+        self.update_config(ik)
+
+        # Add the cartesian target of the end effector
+        ik.add_target(frame_name=self.end_effector_frame,
+                    target_type=inverse_kinematics_nlp.TargetType.POSE,
+                    as_constraint=False)
+
+        return ik
+
+    def update_config(self, ik: inverse_kinematics_nlp.InverseKinematicsNLP):
+
         # Set the current configuration
         ik.set_current_robot_configuration(
             base_position=np.array([self.base_position.x, self.base_position.y, self.base_position.z]),
@@ -195,14 +232,7 @@ class Panda():
                 self.base_orientation.y, 
                 self.base_orientation.z, 
                 self.base_orientation.w]),
-            joint_configuration=np.array([self.joint_positions[i] for i in self._arm_joint_names.keys()]))
-
-        # Add the cartesian target of the end effector
-        ik.add_target(frame_name=self.end_effector_frame,
-                    target_type=inverse_kinematics_nlp.TargetType.POSE,
-                    as_constraint=False)
-
-        return ik
+            joint_configuration=np.array(self.joint_positions))
 
     def solve_ik(self, target_pose: Odometry) -> np.ndarray:
 
