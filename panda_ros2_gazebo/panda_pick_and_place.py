@@ -6,7 +6,6 @@ import copy
 
 from .scripts.models.panda import Panda, FingersAction
 
-# from .python.models.panda import Panda, FingersAction
 from scipy.spatial.transform import Rotation as R
 
 from nav_msgs.msg import Odometry
