@@ -137,7 +137,7 @@ class Panda():
         # Get the end effector Jacobian
         J = self._fk.get_frame_jacobian(self.end_effector_frame)
 
-        self._node_handle.get_logger().info('END EFFECTOR JACOBIAN:\n{}'.format(J))
+        # self._node_handle.get_logger().info('END EFFECTOR JACOBIAN:\n{}'.format(J))
 
         # compose the joint velocity vector for determining the end effector pose using the end effector Jacobian
         num_joints = self._articulated_system.getNrOfJoints() + 1 # '+1' here because this includes the fixed joint between the robot and the 'world', I guess...
@@ -152,12 +152,12 @@ class Panda():
                 joint_velocities[i] = self._joint_states.velocity[j]
                 j += 1
 
-        self._node_handle.get_logger().info('JOINT VELOCITIES:\n{}'.format(joint_velocities))
+        # self._node_handle.get_logger().info('JOINT VELOCITIES:\n{}'.format(joint_velocities))
 
         end_effector_twist = np.matmul(J, joint_velocities[:, np.newaxis]).squeeze()
 
-        self._node_handle.get_logger().info('END EFFECTOR TWIST:\n{}'.format(end_effector_twist))
-        self._node_handle.get_logger().info('END EFFECTOR POSE IN BASE FRAME:\n{}'.format(end_effector_pose_in_base_frame))
+        # self._node_handle.get_logger().info('END EFFECTOR TWIST:\n{}'.format(end_effector_twist))
+        # self._node_handle.get_logger().info('END EFFECTOR POSE IN BASE FRAME:\n{}'.format(end_effector_pose_in_base_frame))
 
         end_effector_pose_msg = PoseWithCovariance()
         pose = Pose()
@@ -167,7 +167,7 @@ class Panda():
 
         quat = R.from_matrix(end_effector_pose_in_base_frame[:3, :3]).as_quat()
 
-        self._node_handle.get_logger().info('END EFFECTOR QUATERNION:\n{}'.format(quat))
+        # self._node_handle.get_logger().info('END EFFECTOR QUATERNION:\n{}'.format(quat))
 
         pose.orientation.x = quat[0]
         pose.orientation.y = quat[1]

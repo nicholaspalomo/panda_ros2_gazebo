@@ -2,6 +2,7 @@ import rclpy
 from rclpy.node import Node
 
 import numpy as np
+import copy
 
 from .scripts.models.panda import Panda, FingersAction
 
@@ -72,6 +73,7 @@ class PandaPickAndPlace(Node):
         self._panda.set_joint_states(self._joint_states)
         self._end_effector_target = self._panda.solve_fk(self._joint_states.position)
         self._joint_targets = self._panda.solve_ik(self._end_effector_target)
+        self._end_effector_current = Odometry()
 
     def setup_joint_group_effort_controller(self):
 
@@ -106,16 +108,17 @@ class PandaPickAndPlace(Node):
         self._panda.set_joint_states(joint_states)
         self._joint_states = joint_states
 
-        self.get_logger().info('JOINT POSITIONS:\n{}'.format(self._joint_states.position))
+        # self.get_logger().info('JOINT POSITIONS:\n{}'.format(self._joint_states.position))
 
     def joint_group_position_controller_callback(self) -> None:
 
         self._panda.set_joint_states(self._joint_states)
         if self.end_effector_reached():
             # sample a new end effector target
+            self.get_logger().info('END EFFECTOR TARGET REACHED')
             self.sample_end_effector_target()
 
-        self.get_logger().info('JOINT TARGETS:\n{}'.format(self._joint_targets))
+        # self.get_logger().info('JOINT TARGETS:\n{}'.format(self._joint_targets))
 
         msg = Float64MultiArray()
         msg.data = list(self._joint_targets)
@@ -126,6 +129,7 @@ class PandaPickAndPlace(Node):
         self._panda.set_joint_states(self._joint_states)
         if self.end_effector_reached():
             # sample a new end effector target
+            # self.get_logger().info('END EFFECTOR TARGET REACHED')
             self.sample_end_effector_target()
 
         # compute the effort from 
@@ -151,20 +155,20 @@ class PandaPickAndPlace(Node):
         # TODO: Incorporate the end effector fingers into the planning
         # TODO: Visualize the position target markers in RViz 
 
-        current_end_effector_pose = self._panda.solve_fk(self._joint_states.position)
+        self._end_effector_current = self._panda.solve_fk(self._joint_states.position)
 
         # check the position to see if the target has been reached
         position = np.array([
-            current_end_effector_pose.pose.pose.position.x,
-            current_end_effector_pose.pose.pose.position.y,
-            current_end_effector_pose.pose.pose.position.z])
+            self._end_effector_current.pose.pose.position.x,
+            self._end_effector_current.pose.pose.position.y,
+            self._end_effector_current.pose.pose.position.z])
         velocity = np.array([
-            current_end_effector_pose.twist.twist.linear.x,
-            current_end_effector_pose.twist.twist.linear.y,
-            current_end_effector_pose.twist.twist.linear.z,
-            current_end_effector_pose.twist.twist.angular.x,
-            current_end_effector_pose.twist.twist.angular.y,
-            current_end_effector_pose.twist.twist.angular.z])
+            self._end_effector_current.twist.twist.linear.x,
+            self._end_effector_current.twist.twist.linear.y,
+            self._end_effector_current.twist.twist.linear.z,
+            self._end_effector_current.twist.twist.angular.x,
+            self._end_effector_current.twist.twist.angular.y,
+            self._end_effector_current.twist.twist.angular.z])
         target = np.array([
             self._end_effector_target.pose.pose.position.x,
             self._end_effector_target.pose.pose.position.y,
@@ -173,21 +177,21 @@ class PandaPickAndPlace(Node):
         masked_target = mask * target
         masked_current = mask * position
 
-        self.get_logger().info('END EFFECTOR POSITION:\n{}'.format(masked_current))
-        self.get_logger().info('END EFFECTOR POSITION TARGET:\n{}'.format(masked_target))
-        self.get_logger().info('TRANSLATIONAL POSITION ERR:\n{}'.format(masked_current - masked_target))
-        self.get_logger().info('END EFFECTOR TRANSLATIONAL VELOCITY NORM:\n{}'.format(np.linalg.norm(velocity[:3])))
-        self.get_logger().info('JOINT POSITION ERROR:\n{}'.format(self._joint_targets - np.array(self._joint_states.position)))
+        # self.get_logger().info('END EFFECTOR POSITION:\n{}'.format(masked_current))
+        # self.get_logger().info('END EFFECTOR POSITION TARGET:\n{}'.format(masked_target))
+        # self.get_logger().info('TRANSLATIONAL POSITION ERR:\n{}'.format(masked_current - masked_target))
+        # self.get_logger().info('END EFFECTOR TRANSLATIONAL VELOCITY NORM:\n{}'.format(np.linalg.norm(velocity[:3])))
+        # self.get_logger().info('JOINT POSITION ERROR:\n{}'.format(self._joint_targets - np.array(self._joint_states.position)))
 
         end_effector_reached = np.linalg.norm(masked_current - masked_target) < max_error_pos and \
             np.linalg.norm(velocity[:3]) < max_error_vel
 
         # check the orientation to see if the target has been reached
         orientation = np.array([
-            current_end_effector_pose.pose.pose.orientation.x,
-            current_end_effector_pose.pose.pose.orientation.y,
-            current_end_effector_pose.pose.pose.orientation.z,
-            current_end_effector_pose.pose.pose.orientation.w])
+            self._end_effector_current.pose.pose.orientation.x,
+            self._end_effector_current.pose.pose.orientation.y,
+            self._end_effector_current.pose.pose.orientation.z,
+            self._end_effector_current.pose.pose.orientation.w])
         target_inv = np.array([-self._end_effector_target.pose.pose.orientation.x,
             -self._end_effector_target.pose.pose.orientation.y,
             -self._end_effector_target.pose.pose.orientation.z,
@@ -231,17 +235,20 @@ class PandaPickAndPlace(Node):
         self._end_effector_target.pose.pose.orientation.z = quat_xyzw[2]
         self._end_effector_target.pose.pose.orientation.w = quat_xyzw[3]
 
-        self.get_logger().info("END EFFECTOR TARGET SET TO [x, y z]=[{}, {}, {}], [r, p , y]=[{}, {}, {}]".format(
-            self._end_effector_target.pose.pose.position.x,
-            self._end_effector_target.pose.pose.position.y,
-            self._end_effector_target.pose.pose.position.z,
-            r, p, y
-        ))
+        # self.get_logger().info("END EFFECTOR TARGET SET TO [x, y z]=[{}, {}, {}], [r, p , y]=[{}, {}, {}]".format(
+        #     self._end_effector_target.pose.pose.position.x,
+        #     self._end_effector_target.pose.pose.position.y,
+        #     self._end_effector_target.pose.pose.position.z,
+        #     r, p, y
+        # ))
 
         self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
-        self._end_effector_target_publisher.publish(self._end_effector_target)
-        self._end_effector_pose_publisher.publish(self._panda.solve_fk(self._joint_states.position))
+        end_effector_target_msg = copy.deepcopy(self._end_effector_target)
+        end_effector_current_msg = copy.deepcopy(self._end_effector_current)
+
+        self._end_effector_target_publisher.publish(end_effector_target_msg)
+        self._end_effector_pose_publisher.publish(end_effector_current_msg)
 
 def main(args=None):
     rclpy.init(args=args)
