@@ -2,20 +2,20 @@
 # This software may be modified and distributed under the terms of the
 # GNU Lesser General Public License v2.1 or any later version.
 
-from ntpath import join
 import os
-
-from ..rbd.idyntree.helpers import FrameVelocityRepresentation
-
 import enum
 import numpy as np
 from typing import List
+from scipy.spatial.transform import Rotation as R
+
+# For using iDynTree inverse kinematics library
 import idyntree.bindings as idt
 from ..rbd import conversions
 from ..rbd.idyntree import inverse_kinematics_nlp
 from ..rbd.idyntree import kindyncomputations
-from scipy.spatial.transform import Rotation as R
+from ..rbd.idyntree.helpers import FrameVelocityRepresentation
 
+# ROS2 message and service data structures
 from geometry_msgs.msg import Transform, Vector3, Quaternion, PoseWithCovariance, TwistWithCovariance, Pose, Twist
 from sensor_msgs.msg import JointState
 from nav_msgs.msg import Odometry
@@ -103,8 +103,6 @@ class Panda():
         # Initial joint targets
         self._initial_joint_position_targets = self._node_handle.get_parameter('initial_joint_angles').value
         self._initial_joint_position_targets = self.move_fingers(self._initial_joint_position_targets, FingersAction.OPEN)
-
-        self._node_handle.get_logger().info('INITIAL JOIN ANGLES:\n{}'.format(self._initial_joint_position_targets))
 
         self._fk = kindyncomputations.KinDynComputations(self._urdf, considered_joints=list(self._arm_joint_names.values()), velocity_representation=FrameVelocityRepresentation.INERTIAL_FIXED_REPRESENTATION)
 
@@ -252,7 +250,8 @@ class Panda():
 
     def reset_model(self) -> np.ndarray:
 
-        self.get_logger().info('RESETTING THE JOINT ANGLES')
+        self._node_handle.get_logger().info('RESETTING THE JOINT ANGLES...')
+        self._node_handle.get_logger().info('INITIAL JOIN ANGLES:\n{}'.format(self._initial_joint_position_targets))
 
         return self._initial_joint_position_targets
 
@@ -262,11 +261,11 @@ class Panda():
         for finger_idx, finger_limits in self.finger_joint_limits.items():
             if action is FingersAction.OPEN:
                 joint_positions[finger_idx] = finger_limits[1]
-                self.get_logger().info('OPENING THE GRIPPER')
+                self._node_handle.get_logger().info('OPENING THE GRIPPER...')
 
             if action is FingersAction.CLOSE:
                 joint_positions[finger_idx] = finger_limits[0]
-                self.get_logger().info('CLOSING THE GRIPPER')
+                self._node_handle.get_logger().info('CLOSING THE GRIPPER...')
 
         return joint_positions.copy()
 
