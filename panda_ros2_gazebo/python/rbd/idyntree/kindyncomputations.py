@@ -86,45 +86,6 @@ class KinDynComputations:
         if not ok_state:
             raise RuntimeError("Failed to set the robot state")
 
-    def set_robot_state_from_model(self,
-                                   model: scenario_core.Model,
-                                   world_gravity: np.ndarray = None) \
-            -> None:
-
-        s = np.array(model.joint_positions(self.joint_serialization()))
-        ds = np.array(model.joint_velocities(self.joint_serialization()))
-
-        world_o_base = np.array(model.base_position())
-        world_quat_base = np.array(model.base_orientation())
-
-        # Velocity representations
-        body = FrameVelocityRepresentation.BODY_FIXED_REPRESENTATION.to_idyntree()
-        mixed = FrameVelocityRepresentation.MIXED_REPRESENTATION.to_idyntree()
-
-        if self.kindyn.getFrameVelocityRepresentation() is mixed:
-
-            base_linear_velocity = np.array(model.base_world_linear_velocity())
-            base_angular_velocity = np.array(model.base_world_angular_velocity())
-
-        elif self.kindyn.getFrameVelocityRepresentation() is body:
-
-            base_linear_velocity = np.array(model.base_body_linear_velocity())
-            base_angular_velocity = np.array(model.base_body_angular_velocity())
-
-        else:
-            raise RuntimeError("INERTIAL_FIXED_REPRESENTATION not yet supported")
-
-        # Pack the data structures
-        world_H_base = conversions.Transform.from_position_and_quaternion(
-            position=world_o_base, quaternion=world_quat_base)
-        base_velocity_6d = np.concatenate((base_linear_velocity, base_angular_velocity))
-
-        self.set_robot_state(s=s,
-                             ds=ds,
-                             world_H_base=world_H_base,
-                             base_velocity=base_velocity_6d,
-                             world_gravity=world_gravity)
-
     def get_floating_base(self) -> str:
 
         return self.kindyn.getFloatingBase()
