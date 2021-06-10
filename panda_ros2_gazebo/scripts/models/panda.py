@@ -245,7 +245,7 @@ class Panda():
 
         quat_xyzw = np.array([target_pose.pose.pose.orientation.x, target_pose.pose.pose.orientation.y, target_pose.pose.pose.orientation.z, target_pose.pose.pose.orientation.w])
 
-        quat_xyzw = R.from_euler(seq="y", angles=90, degrees=True).as_quat()
+        # quat_xyzw = R.from_euler(seq="y", angles=90, degrees=True).as_quat()
 
         self._ik.update_transform_target(
             target_name=self._ik.get_active_target_names()[0],

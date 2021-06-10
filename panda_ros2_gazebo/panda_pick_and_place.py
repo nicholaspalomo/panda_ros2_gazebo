@@ -177,12 +177,6 @@ class PandaPickAndPlace(Node):
         masked_target = mask * target
         masked_current = mask * position
 
-        # self.get_logger().info('END EFFECTOR POSITION:\n{}'.format(masked_current))
-        # self.get_logger().info('END EFFECTOR POSITION TARGET:\n{}'.format(masked_target))
-        # self.get_logger().info('TRANSLATIONAL POSITION ERR:\n{}'.format(masked_current - masked_target))
-        # self.get_logger().info('END EFFECTOR TRANSLATIONAL VELOCITY NORM:\n{}'.format(np.linalg.norm(velocity[:3])))
-        # self.get_logger().info('JOINT POSITION ERROR:\n{}'.format(self._joint_targets - np.array(self._joint_states.position)))
-
         end_effector_reached = np.linalg.norm(masked_current - masked_target) < max_error_pos and \
             np.linalg.norm(velocity[:3]) < max_error_vel
 
@@ -192,18 +186,25 @@ class PandaPickAndPlace(Node):
             self._end_effector_current.pose.pose.orientation.y,
             self._end_effector_current.pose.pose.orientation.z,
             self._end_effector_current.pose.pose.orientation.w])
-        target_inv = np.array([-self._end_effector_target.pose.pose.orientation.x,
+        target_inv = np.array([
+            -self._end_effector_target.pose.pose.orientation.x,
             -self._end_effector_target.pose.pose.orientation.y,
             -self._end_effector_target.pose.pose.orientation.z,
             self._end_effector_target.pose.pose.orientation.w])
-        target /= np.linalg.norm(target)
+        target_inv /= np.linalg.norm(target_inv)
 
         # find the rotation difference between the two quaternions
         orientation_diff = quat_mult(orientation, target_inv)  #(orientation, target_inv)
         rot_vec = R.from_quat(orientation_diff).as_rotvec()
 
-        # end_effector_reached = end_effector_reached and np.linalg.norm(rot_vec) - 1 < max_error_pos and \
-        #     np.linalg.norm(velocity[3:]) < max_error_vel
+        end_effector_reached &= np.pi - np.linalg.norm(rot_vec) < max_error_rot and np.linalg.norm(velocity[3:]) < max_error_vel
+
+        # self.get_logger().info('END EFFECTOR POSITION:\n{}'.format(masked_current))
+        # self.get_logger().info('END EFFECTOR POSITION TARGET:\n{}'.format(masked_target))
+        # self.get_logger().info('TRANSLATIONAL POSITION ERR:\n{}'.format(masked_current - masked_target))
+        # self.get_logger().info('END EFFECTOR TRANSLATIONAL VELOCITY NORM:\n{}'.format(np.linalg.norm(velocity[:3])))
+        # self.get_logger().info('ORIENTATION ERROR NORM:\n{}'.format(np.linalg.norm(rot_vec)))
+        # self.get_logger().info('JOINT POSITION ERROR:\n{}'.format(self._joint_targets - np.array(self._joint_states.position)))
 
         return end_effector_reached
 
