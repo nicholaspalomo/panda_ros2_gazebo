@@ -3,7 +3,9 @@ from rclpy.node import Node
 
 import numpy as np
 
-from .python.models.panda import Panda, FingersAction
+from .scripts.models.panda import Panda, FingersAction
+
+# from .python.models.panda import Panda, FingersAction
 from scipy.spatial.transform import Rotation as R
 
 from nav_msgs.msg import Odometry
@@ -13,6 +15,15 @@ from rcl_interfaces.srv import GetParameters
 
 # Configure numpy output
 np.set_printoptions(precision=4, suppress=True)
+
+def quat_mult(q0, q1):
+
+    x0, y0, z0, w0 = q0
+    x1, y1, z1, w1 = q1
+    return np.array([-x1 * x0 - y1 * y0 - z1 * z0 + w1 * w0,
+                     x1 * w0 + y1 * z0 - z1 * y0 + w1 * x0,
+                     -x1 * z0 + y1 * w0 + z1 * x0 + w1 * y0,
+                     x1 * y0 - y1 * x0 + z1 * w0 + w1 * z0], dtype=np.float64)
 
 class PandaPickAndPlace(Node):
     def __init__(self):
@@ -95,7 +106,7 @@ class PandaPickAndPlace(Node):
         self._panda.set_joint_states(joint_states)
         self._joint_states = joint_states
 
-        self.get_logger().info('JOINT POSITIONS: {}'.format(self._joint_states.position))
+        self.get_logger().info('JOINT POSITIONS:\n{}'.format(self._joint_states.position))
 
     def joint_group_position_controller_callback(self) -> None:
 
@@ -104,7 +115,7 @@ class PandaPickAndPlace(Node):
             # sample a new end effector target
             self.sample_end_effector_target()
 
-        self.get_logger().info('JOINT TARGETS: {}'.format(self._joint_targets))
+        self.get_logger().info('JOINT TARGETS:\n{}'.format(self._joint_targets))
 
         msg = Float64MultiArray()
         msg.data = list(self._joint_targets)
@@ -131,11 +142,18 @@ class PandaPickAndPlace(Node):
         self._joint_commands_publisher.publish(msg)
 
     def end_effector_reached(self,
-                            max_error_pos: float = 0.1,
-                            max_error_vel: float = 0.5,
+                            max_error_pos: float = 0.05,
+                            max_error_rot: float = 0.05,
+                            max_error_vel: float = 0.1,
                             mask: np.ndarray = np.array([1., 1., 1.])) -> bool:
         
+        # TODO: Check if the target pose reached
+        # TODO: Incorporate the end effector fingers into the planning
+        # TODO: Visualize the position target markers in RViz 
+
         current_end_effector_pose = self._panda.solve_fk(self._joint_states.position)
+
+        # check the position to see if the target has been reached
         position = np.array([
             current_end_effector_pose.pose.pose.position.x,
             current_end_effector_pose.pose.pose.position.y,
@@ -155,14 +173,35 @@ class PandaPickAndPlace(Node):
         masked_target = mask * target
         masked_current = mask * position
 
-        self.get_logger().info('END EFFECTOR POSITION: {}'.format(masked_current))
-        self.get_logger().info('END EFFECTOR POSITION TARGET: {}'.format(masked_target))
-        self.get_logger().info('TRANSLATIONAL POSITION ERR: {}'.format(masked_current - masked_target))
-        self.get_logger().info('END EFFECTOR TRANSLATIONAL VELOCITY NORM: {}'.format(np.linalg.norm(velocity[:3])))
-        self.get_logger().info('JOINT POSITION ERROR: {}'.format(self._joint_targets - np.array(self._joint_states.position)))
+        self.get_logger().info('END EFFECTOR POSITION:\n{}'.format(masked_current))
+        self.get_logger().info('END EFFECTOR POSITION TARGET:\n{}'.format(masked_target))
+        self.get_logger().info('TRANSLATIONAL POSITION ERR:\n{}'.format(masked_current - masked_target))
+        self.get_logger().info('END EFFECTOR TRANSLATIONAL VELOCITY NORM:\n{}'.format(np.linalg.norm(velocity[:3])))
+        self.get_logger().info('JOINT POSITION ERROR:\n{}'.format(self._joint_targets - np.array(self._joint_states.position)))
 
-        return np.linalg.norm(masked_current - masked_target) < max_error_pos and \
+        end_effector_reached = np.linalg.norm(masked_current - masked_target) < max_error_pos and \
             np.linalg.norm(velocity[:3]) < max_error_vel
+
+        # check the orientation to see if the target has been reached
+        orientation = np.array([
+            current_end_effector_pose.pose.pose.orientation.x,
+            current_end_effector_pose.pose.pose.orientation.y,
+            current_end_effector_pose.pose.pose.orientation.z,
+            current_end_effector_pose.pose.pose.orientation.w])
+        target_inv = np.array([-self._end_effector_target.pose.pose.orientation.x,
+            -self._end_effector_target.pose.pose.orientation.y,
+            -self._end_effector_target.pose.pose.orientation.z,
+            self._end_effector_target.pose.pose.orientation.w])
+        target /= np.linalg.norm(target)
+
+        # find the rotation difference between the two quaternions
+        orientation_diff = quat_mult(orientation, target_inv)  #(orientation, target_inv)
+        rot_vec = R.from_quat(orientation_diff).as_rotvec()
+
+        # end_effector_reached = end_effector_reached and np.linalg.norm(rot_vec) - 1 < max_error_pos and \
+        #     np.linalg.norm(velocity[3:]) < max_error_vel
+
+        return end_effector_reached
 
     def move_fingers(self,
                     action: FingersAction) -> None:
@@ -178,9 +217,9 @@ class PandaPickAndPlace(Node):
     def sample_end_effector_target(self) -> Odometry:
 
         self._end_effector_target.header.stamp = self.get_clock().now().to_msg()
-        self._end_effector_target.pose.pose.position.x = np.random.uniform(low=0.25, high=0.6)
-        self._end_effector_target.pose.pose.position.y = np.random.uniform(low=0.25, high=0.6)
-        self._end_effector_target.pose.pose.position.z = np.random.uniform(low=0.25, high=0.6)
+        self._end_effector_target.pose.pose.position.x = np.random.uniform(low=-0.6, high=0.6)
+        self._end_effector_target.pose.pose.position.y = np.random.uniform(low=-0.6, high=0.6)
+        self._end_effector_target.pose.pose.position.z = np.random.uniform(low=0.1, high=0.6)
 
         r = np.random.uniform(low=-np.pi/4, high=np.pi/4)
         p = np.random.uniform(low=-np.pi/4, high=np.pi/4)

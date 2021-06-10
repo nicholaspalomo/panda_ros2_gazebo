@@ -239,9 +239,9 @@ class Panda():
 
         target_position = np.array([target_pose.pose.pose.position.x, target_pose.pose.pose.position.y, target_pose.pose.pose.position.z])
 
-        # target_position = np.matmul(
-        #     np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]]), 
-        #     target_position[:, np.newaxis]).squeeze()
+        target_position = np.matmul(
+            np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]]), 
+            target_position[:, np.newaxis]).squeeze()
 
         quat_xyzw = np.array([target_pose.pose.pose.orientation.x, target_pose.pose.pose.orientation.y, target_pose.pose.pose.orientation.z, target_pose.pose.pose.orientation.w])
 

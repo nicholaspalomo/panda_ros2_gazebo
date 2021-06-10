@@ -1,1 +1,1 @@
-from . import python
+from . import scripts
