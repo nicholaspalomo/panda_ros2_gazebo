@@ -1,23 +1,30 @@
-import rclpy
-from rclpy.node import Node
+# Copyright (C) 2021 Bosch LLC CR, North America. All rights reserved.
+# This software may be modified and distributed under the terms of the
+# GNU Lesser General Public License v2.1 or any later version.
 
 import numpy as np
 from numpy import random
+from scipy.spatial.transform import Rotation as R
 import copy
 
-from .scripts.models.panda import Panda, FingersAction
+# ROS2 Python API libraries
+import rclpy
+from rclpy.node import Node
 
-from scipy.spatial.transform import Rotation as R
-
+# ROS2 message and service data structures
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64MultiArray
 from rcl_interfaces.srv import GetParameters
 
+# Panda kinematic model
+from .scripts.models.panda import Panda, FingersAction
+
 # Configure numpy output
 np.set_printoptions(precision=4, suppress=True)
 
 def quat_mult(q0, q1):
+    # Function to multiply two quaternions of the form (i, j, k, re)
 
     x0, y0, z0, w0 = q0
     x1, y1, z1, w1 = q1
@@ -109,17 +116,13 @@ class PandaPickAndPlace(Node):
         self._panda.set_joint_states(joint_states)
         self._joint_states = joint_states
 
-        # self.get_logger().info('JOINT POSITIONS:\n{}'.format(self._joint_states.position))
-
     def joint_group_position_controller_callback(self) -> None:
 
         self._panda.set_joint_states(self._joint_states)
         if self.end_effector_reached():
             # sample a new end effector target
-            # self.get_logger().info('END EFFECTOR TARGET REACHED')
+            self.get_logger().info('END EFFECTOR TARGET REACHED!')
             self.sample_end_effector_target()
-
-        # self.get_logger().info('JOINT TARGETS:\n{}'.format(self._joint_targets))
 
         msg = Float64MultiArray()
         msg.data = list(self._joint_targets)
@@ -130,7 +133,7 @@ class PandaPickAndPlace(Node):
         self._panda.set_joint_states(self._joint_states)
         if self.end_effector_reached():
             # sample a new end effector target
-            # self.get_logger().info('END EFFECTOR TARGET REACHED')
+            self.get_logger().info('END EFFECTOR TARGET REACHED!')
             self.sample_end_effector_target()
 
         # compute the effort from 
@@ -152,13 +155,12 @@ class PandaPickAndPlace(Node):
                             max_error_vel: float = 0.1,
                             mask: np.ndarray = np.array([1., 1., 1.])) -> bool:
         
-        # TODO: Check if the target pose reached
-        # TODO: Incorporate the end effector fingers into the planning
         # TODO: Visualize the position target markers in RViz 
 
+        # Calculate the end effector location relative to the base from inverse kinematics
         self._end_effector_current = self._panda.solve_fk(self._joint_states.position)
 
-        # check the position to see if the target has been reached
+        # Check the position to see if the target has been reached
         position = np.array([
             self._end_effector_current.pose.pose.position.x,
             self._end_effector_current.pose.pose.position.y,
@@ -181,7 +183,7 @@ class PandaPickAndPlace(Node):
         end_effector_reached = np.linalg.norm(masked_current - masked_target) < max_error_pos and \
             np.linalg.norm(velocity[:3]) < max_error_vel
 
-        # check the orientation to see if the target has been reached
+        # Check the orientation to see if the target has been reached
         orientation = np.array([
             self._end_effector_current.pose.pose.orientation.x,
             self._end_effector_current.pose.pose.orientation.y,
@@ -195,27 +197,22 @@ class PandaPickAndPlace(Node):
         target_inv /= np.linalg.norm(target_inv)
 
         # find the rotation difference between the two quaternions
-        orientation_diff = quat_mult(orientation, target_inv)  #(orientation, target_inv)
+        orientation_diff = quat_mult(orientation, target_inv)
         rot_vec = R.from_quat(orientation_diff).as_rotvec()
 
         end_effector_reached &= np.pi - np.linalg.norm(rot_vec) < max_error_rot and np.linalg.norm(velocity[3:]) < max_error_vel
-
-        # self.get_logger().info('END EFFECTOR POSITION:\n{}'.format(masked_current))
-        # self.get_logger().info('END EFFECTOR POSITION TARGET:\n{}'.format(masked_target))
-        # self.get_logger().info('TRANSLATIONAL POSITION ERR:\n{}'.format(masked_current - masked_target))
-        # self.get_logger().info('END EFFECTOR TRANSLATIONAL VELOCITY NORM:\n{}'.format(np.linalg.norm(velocity[:3])))
-        # self.get_logger().info('ORIENTATION ERROR NORM:\n{}'.format(np.linalg.norm(rot_vec)))
-        # self.get_logger().info('JOINT POSITION ERROR:\n{}'.format(self._joint_targets - np.array(self._joint_states.position)))
 
         return end_effector_reached
 
     def sample_end_effector_target(self) -> Odometry:
 
+        # Sample a new target position...
         self._end_effector_target.header.stamp = self.get_clock().now().to_msg()
         self._end_effector_target.pose.pose.position.x = np.random.uniform(low=-0.6, high=0.6)
         self._end_effector_target.pose.pose.position.y = np.random.uniform(low=-0.6, high=0.6)
         self._end_effector_target.pose.pose.position.z = np.random.uniform(low=0.1, high=0.6)
 
+        # ...and a new target orientation
         r = np.random.uniform(low=-np.pi/4, high=np.pi/4)
         p = np.random.uniform(low=-np.pi/4, high=np.pi/4)
         y = np.random.uniform(low=-np.pi/4, high=np.pi/4)
@@ -226,12 +223,12 @@ class PandaPickAndPlace(Node):
         self._end_effector_target.pose.pose.orientation.z = quat_xyzw[2]
         self._end_effector_target.pose.pose.orientation.w = quat_xyzw[3]
 
-        # self.get_logger().info("END EFFECTOR TARGET SET TO [x, y z]=[{}, {}, {}], [r, p , y]=[{}, {}, {}]".format(
-        #     self._end_effector_target.pose.pose.position.x,
-        #     self._end_effector_target.pose.pose.position.y,
-        #     self._end_effector_target.pose.pose.position.z,
-        #     r, p, y
-        # ))
+        self.get_logger().info("END EFFECTOR TARGET SET TO:\n[x, y z]=[{}, {}, {}]\n[r, p , y]=[{}, {}, {}]".format(
+            self._end_effector_target.pose.pose.position.x,
+            self._end_effector_target.pose.pose.position.y,
+            self._end_effector_target.pose.pose.position.z,
+            r, p, y
+        ))
 
         self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
@@ -241,6 +238,7 @@ class PandaPickAndPlace(Node):
         else:
             self._joint_targets[-2:] = self._panda.move_fingers(list(self._joint_targets), FingersAction.CLOSE)[-2:]
 
+        # Publish the end effector target and odometry messages
         end_effector_target_msg = copy.deepcopy(self._end_effector_target)
         end_effector_current_msg = copy.deepcopy(self._end_effector_current)
 
