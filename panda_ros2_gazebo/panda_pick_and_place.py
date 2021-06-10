@@ -2,6 +2,7 @@ import rclpy
 from rclpy.node import Node
 
 import numpy as np
+from numpy import random
 import copy
 
 from .scripts.models.panda import Panda, FingersAction
@@ -208,18 +209,6 @@ class PandaPickAndPlace(Node):
 
         return end_effector_reached
 
-    def move_fingers(self,
-                    action: FingersAction) -> None:
-        # TODO: Include the fingers in the control loop
-        # if self._panda.finger_joint_limits.get(joint_name) is not None:
-        #     if action is FingersAction.OPEN:
-        #         self._joint_targets[i] = self._panda.finger_joint_limits[joint_name][1]
-
-        #     if action is FingersAction.CLOSE:
-        #         self._joint_targets[i] = self._panda.finger_joint_limits[joint_name][0]
-
-        return
-
     def sample_end_effector_target(self) -> Odometry:
 
         self._end_effector_target.header.stamp = self.get_clock().now().to_msg()
@@ -245,6 +234,12 @@ class PandaPickAndPlace(Node):
         # ))
 
         self._joint_targets = self._panda.solve_ik(self._end_effector_target)
+
+        # Sample whether or not the fingers should be open or closed
+        if random.random() > 0.5:
+            self._joint_targets[-2:] = self._panda.move_fingers(list(self._joint_targets), FingersAction.OPEN)[-2:]
+        else:
+            self._joint_targets[-2:] = self._panda.move_fingers(list(self._joint_targets), FingersAction.CLOSE)[-2:]
 
         end_effector_target_msg = copy.deepcopy(self._end_effector_target)
         end_effector_current_msg = copy.deepcopy(self._end_effector_current)

@@ -2,6 +2,7 @@
 # This software may be modified and distributed under the terms of the
 # GNU Lesser General Public License v2.1 or any later version.
 
+from ntpath import join
 import os
 
 from ..rbd.idyntree.helpers import FrameVelocityRepresentation
@@ -102,6 +103,9 @@ class Panda():
 
         # Initial joint targets
         self._initial_joint_position_targets = self._node_handle.get_parameter('initial_joint_angles').value
+        self._initial_joint_position_targets = self.move_fingers(self._initial_joint_position_targets, FingersAction.OPEN)
+
+        self._node_handle.get_logger().info('INITIAL JOIN ANGLES:\n{}'.format(self._initial_joint_position_targets))
 
         # TODO: Get kinematic-dynamic computations to be able to compute frame poses from kinematics
         self._fk = kindyncomputations.KinDynComputations(self._urdf, considered_joints=list(self._arm_joint_names.values()), velocity_representation=FrameVelocityRepresentation.INERTIAL_FIXED_REPRESENTATION)
@@ -264,6 +268,18 @@ class Panda():
 
         return self._initial_joint_position_targets
 
+    def move_fingers(self, joint_positions: List[float], action: FingersAction = FingersAction.OPEN):
+        # Returns a vector of joint positions in which the fingers are 'OPEN' or 'CLOSED', depending on the value of 'action'
+
+        for finger_idx, finger_limits in self.finger_joint_limits.items():
+            if action is FingersAction.OPEN:
+                joint_positions[finger_idx] = finger_limits[1]
+
+            if action is FingersAction.CLOSE:
+                joint_positions[finger_idx] = finger_limits[0]
+
+        return joint_positions.copy()
+
     @property
     def num_joints(self) -> int:
 
@@ -312,6 +328,11 @@ class Panda():
     def finger_joint_limits(self):
 
         return self._finger_joint_limits
+
+    @property
+    def finger_joint_idxs(self):
+
+        return self._finger_joint_names
 
     @property
     def base_frame(self) -> str:
