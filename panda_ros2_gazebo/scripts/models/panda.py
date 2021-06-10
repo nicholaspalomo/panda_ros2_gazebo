@@ -23,7 +23,6 @@ from gazebo_msgs.msg import EntityState
 from gazebo_msgs.srv import SetEntityState
 from std_srvs.srv import Empty
 
-# TODO: rather than using joint tags from the params.yaml, get the joint type directly from the iDynTree library
 class FingersAction(enum.Enum):
 
     OPEN = enum.auto()
@@ -107,7 +106,6 @@ class Panda():
 
         self._node_handle.get_logger().info('INITIAL JOIN ANGLES:\n{}'.format(self._initial_joint_position_targets))
 
-        # TODO: Get kinematic-dynamic computations to be able to compute frame poses from kinematics
         self._fk = kindyncomputations.KinDynComputations(self._urdf, considered_joints=list(self._arm_joint_names.values()), velocity_representation=FrameVelocityRepresentation.INERTIAL_FIXED_REPRESENTATION)
 
         # create containers for the joint position, velocity, effort
@@ -141,8 +139,6 @@ class Panda():
         # Get the end effector Jacobian
         J = self._fk.get_frame_jacobian(self.end_effector_frame)
 
-        # self._node_handle.get_logger().info('END EFFECTOR JACOBIAN:\n{}'.format(J))
-
         # compose the joint velocity vector for determining the end effector pose using the end effector Jacobian
         num_joints = self._articulated_system.getNrOfJoints() + 1 # '+1' here because this includes the fixed joint between the robot and the 'world', I guess...
         joint_velocities = np.zeros((num_joints,))
@@ -156,12 +152,7 @@ class Panda():
                 joint_velocities[i] = self._joint_states.velocity[j]
                 j += 1
 
-        # self._node_handle.get_logger().info('JOINT VELOCITIES:\n{}'.format(joint_velocities))
-
         end_effector_twist = np.matmul(J, joint_velocities[:, np.newaxis]).squeeze()
-
-        # self._node_handle.get_logger().info('END EFFECTOR TWIST:\n{}'.format(end_effector_twist))
-        # self._node_handle.get_logger().info('END EFFECTOR POSE IN BASE FRAME:\n{}'.format(end_effector_pose_in_base_frame))
 
         end_effector_pose_msg = PoseWithCovariance()
         pose = Pose()
@@ -170,8 +161,6 @@ class Panda():
         pose.position.z = end_effector_pose_in_base_frame[2, -1]
 
         quat = R.from_matrix(end_effector_pose_in_base_frame[:3, :3]).as_quat()
-
-        # self._node_handle.get_logger().info('END EFFECTOR QUATERNION:\n{}'.format(quat))
 
         pose.orientation.x = quat[0]
         pose.orientation.y = quat[1]
@@ -263,8 +252,7 @@ class Panda():
 
     def reset_model(self) -> np.ndarray:
 
-        # TODO: Reset the model's joints by pausing the Gazebo physics engine, setting the model state, and starting the simulation again. Also reset the joint angle targets
-        # Use forward kinematics to get the end effector position corresponding to the joint angles
+        self.get_logger().info('RESETTING THE JOINT ANGLES')
 
         return self._initial_joint_position_targets
 
@@ -274,9 +262,11 @@ class Panda():
         for finger_idx, finger_limits in self.finger_joint_limits.items():
             if action is FingersAction.OPEN:
                 joint_positions[finger_idx] = finger_limits[1]
+                self.get_logger().info('OPENING THE GRIPPER')
 
             if action is FingersAction.CLOSE:
                 joint_positions[finger_idx] = finger_limits[0]
+                self.get_logger().info('CLOSING THE GRIPPER')
 
         return joint_positions.copy()
 
@@ -349,7 +339,7 @@ class Panda():
 
         model_file = os.path.join(self._node_handle.get_parameter('share_dir').value, self._node_handle.get_parameter('model_file').value)
 
-        self._node_handle.get_logger().info('MODEL URDF:\n{}'.format(model_file))
+        self._node_handle.get_logger().info('MODEL FILE NAME:\n{}'.format(model_file))
 
         return model_file
 
@@ -364,6 +354,6 @@ class Panda():
         if not ok_load:
             raise RuntimeError("Failed to load model")
         else:
-            self._node_handle.get_logger().info('MODEL SUCCESSFULLY LOADED:\n{}'.format(urdf))
+            self._node_handle.get_logger().info('MODEL SUCCESSFULLY LOADED. FILE NAME:\n{}'.format(urdf))
 
         return self._model_loader
