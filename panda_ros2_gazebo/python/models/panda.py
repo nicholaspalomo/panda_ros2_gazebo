@@ -5,15 +5,14 @@
 import os
 
 from ..rbd.idyntree.helpers import FrameVelocityRepresentation
-from ..rbd.idyntree.kindyncomputations import KinDynComputations
 
 import enum
 import numpy as np
 from typing import List
-from scenario import core as scenario
 import idyntree.bindings as idt
 from ..rbd import conversions
 from ..rbd.idyntree import inverse_kinematics_nlp
+from ..rbd.idyntree import kindyncomputations
 from scipy.spatial.transform import Rotation as R
 
 from geometry_msgs.msg import Transform, Vector3, Quaternion, PoseWithCovariance, TwistWithCovariance, Pose, Twist
@@ -64,7 +63,7 @@ class Panda():
         
         self._articulated_system = self._get_model_loader(self._urdf).model()
 
-        self._node_handle.get_logger().info('NUMBER OF JOINTS: {}'.format(self._articulated_system.getNrOfJoints()))
+        self._node_handle.get_logger().info('NUMBER OF JOINTS:\n{}'.format(self._articulated_system.getNrOfJoints()))
 
         # Get the joint names directly from the iDynTree model
         self._joint_names = []
@@ -105,7 +104,7 @@ class Panda():
         self._initial_joint_position_targets = self._node_handle.get_parameter('initial_joint_angles').value
 
         # TODO: Get kinematic-dynamic computations to be able to compute frame poses from kinematics
-        self._fk = KinDynComputations(self._urdf, considered_joints=list(self._arm_joint_names.values()), velocity_representation=FrameVelocityRepresentation.INERTIAL_FIXED_REPRESENTATION)
+        self._fk = kindyncomputations.KinDynComputations(self._urdf, considered_joints=list(self._arm_joint_names.values()), velocity_representation=FrameVelocityRepresentation.INERTIAL_FIXED_REPRESENTATION)
 
         # create containers for the joint position, velocity, effort
         self._joint_states = JointState()
@@ -138,7 +137,7 @@ class Panda():
         # Get the end effector Jacobian
         J = self._fk.get_frame_jacobian(self.end_effector_frame)
 
-        self._node_handle.get_logger().info('END EFFECTOR JACOBIAN: {}'.format(J))
+        self._node_handle.get_logger().info('END EFFECTOR JACOBIAN:\n{}'.format(J))
 
         # compose the joint velocity vector for determining the end effector pose using the end effector Jacobian
         num_joints = self._articulated_system.getNrOfJoints() + 1 # '+1' here because this includes the fixed joint between the robot and the 'world', I guess...
@@ -153,11 +152,12 @@ class Panda():
                 joint_velocities[i] = self._joint_states.velocity[j]
                 j += 1
 
-        self._node_handle.get_logger().info('JOINT VELOCITIES: {}'.format(joint_velocities))
+        self._node_handle.get_logger().info('JOINT VELOCITIES:\n{}'.format(joint_velocities))
 
         end_effector_twist = np.matmul(J, joint_velocities[:, np.newaxis]).squeeze()
 
-        self._node_handle.get_logger().info('END EFFECTOR TWIST: {}'.format(end_effector_twist))
+        self._node_handle.get_logger().info('END EFFECTOR TWIST:\n{}'.format(end_effector_twist))
+        self._node_handle.get_logger().info('END EFFECTOR POSE IN BASE FRAME:\n{}'.format(end_effector_pose_in_base_frame))
 
         end_effector_pose_msg = PoseWithCovariance()
         pose = Pose()
@@ -167,7 +167,7 @@ class Panda():
 
         quat = R.from_matrix(end_effector_pose_in_base_frame[:3, :3]).as_quat()
 
-        self._node_handle.get_logger().info('END EFFECTOR QUATERNION: {}'.format(quat))
+        self._node_handle.get_logger().info('END EFFECTOR QUATERNION:\n{}'.format(quat))
 
         pose.orientation.x = quat[0]
         pose.orientation.y = quat[1]
@@ -238,6 +238,10 @@ class Panda():
     def solve_ik(self, target_pose: Odometry) -> np.ndarray:
 
         target_position = np.array([target_pose.pose.pose.position.x, target_pose.pose.pose.position.y, target_pose.pose.pose.position.z])
+
+        # target_position = np.matmul(
+        #     np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]]), 
+        #     target_position[:, np.newaxis]).squeeze()
 
         quat_xyzw = np.array([target_pose.pose.pose.orientation.x, target_pose.pose.pose.orientation.y, target_pose.pose.pose.orientation.z, target_pose.pose.pose.orientation.w])
 
@@ -324,7 +328,7 @@ class Panda():
 
         model_file = os.path.join(os.getcwd(), self._node_handle.get_parameter('model_file').value)
 
-        self._node_handle.get_logger().info('MODEL URDF: {}'.format(model_file))
+        self._node_handle.get_logger().info('MODEL URDF:\n{}'.format(model_file))
 
         return model_file
 
@@ -339,6 +343,6 @@ class Panda():
         if not ok_load:
             raise RuntimeError("Failed to load model")
         else:
-            self._node_handle.get_logger().info('MODEL SUCCESSFULLY LOADED: {}'.format(urdf))
+            self._node_handle.get_logger().info('MODEL SUCCESSFULLY LOADED:\n{}'.format(urdf))
 
         return self._model_loader

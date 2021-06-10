@@ -5,7 +5,6 @@
 import numpy as np
 from typing import List, Tuple
 import idyntree.bindings as idt
-from scenario import core as scenario_core
 from ...rbd import conversions
 from ...rbd.idyntree import numpy
 from .helpers import FrameVelocityRepresentation, iDynTreeHelpers
