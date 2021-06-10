@@ -43,7 +43,8 @@ class PandaPickAndPlace(Node):
                 ('end_effector_frame', None),
                 ('arm_joint_tag', None),
                 ('finger_joint_tag', None),
-                ('initial_joint_angles', None)
+                ('initial_joint_angles', None),
+                ('share_dir', None)
             ]
         )
 
@@ -209,13 +210,14 @@ class PandaPickAndPlace(Node):
     def move_fingers(self,
                     action: FingersAction) -> None:
         # TODO: Include the fingers in the control loop
-        for i, joint_name in enumerate(self._panda.joint_names):
-            if self._panda.finger_joint_limits().get(joint_name) is not None:
-                if action is FingersAction.OPEN:
-                    self._joint_targets[i] = self._panda.finger_joint_limits[joint_name][1]
+        # if self._panda.finger_joint_limits.get(joint_name) is not None:
+        #     if action is FingersAction.OPEN:
+        #         self._joint_targets[i] = self._panda.finger_joint_limits[joint_name][1]
 
-                if action is FingersAction.CLOSE:
-                    self._joint_targets[i] = self._panda.finger_joint_limits[joint_name][0]
+        #     if action is FingersAction.CLOSE:
+        #         self._joint_targets[i] = self._panda.finger_joint_limits[joint_name][0]
+
+        return
 
     def sample_end_effector_target(self) -> Odometry:
 

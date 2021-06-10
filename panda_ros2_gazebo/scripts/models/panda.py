@@ -326,7 +326,7 @@ class Panda():
     @property
     def model_file(self) -> str:
 
-        model_file = os.path.join(os.getcwd(), self._node_handle.get_parameter('model_file').value)
+        model_file = os.path.join(self._node_handle.get_parameter('share_dir').value, self._node_handle.get_parameter('model_file').value)
 
         self._node_handle.get_logger().info('MODEL URDF:\n{}'.format(model_file))
 

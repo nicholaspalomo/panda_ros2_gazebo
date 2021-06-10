@@ -27,7 +27,8 @@ def generate_launch_description():
         executable='panda_pick_and_place',
         name='panda_pick_and_place',
         parameters=[
-            parameter_file_path
+            parameter_file_path,
+            {'share_dir' : pkg_share}
         ],
         output='screen'
     )
