@@ -115,7 +115,7 @@ class PandaPickAndPlace(Node):
         self._panda.set_joint_states(self._joint_states)
         if self.end_effector_reached():
             # sample a new end effector target
-            self.get_logger().info('END EFFECTOR TARGET REACHED')
+            # self.get_logger().info('END EFFECTOR TARGET REACHED')
             self.sample_end_effector_target()
 
         # self.get_logger().info('JOINT TARGETS:\n{}'.format(self._joint_targets))
