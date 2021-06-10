@@ -44,22 +44,23 @@ class PandaPickAndPlace(Node):
         self._control_dt = self.get_parameter('control_dt').value
         self._control_callback_timer = self.create_timer(self._control_dt, self.joint_group_position_controller_callback)
 
-        # TODO: Implement logic to wait until first joint states measurement is received
         self._panda = Panda(self)
-
-        # Sample an end effector target
-        self._end_effector_target = Odometry()
-        self.sample_end_effector_target()
-        self._joint_targets = self._panda.solve_ik(self._end_effector_target)
-
         self._num_joints = self._panda.num_joints
+
         self._joint_states = JointState()
-        self._joint_states.position = [0.] * self._num_joints
         self._joint_states.velocity = [0.] * self._num_joints
         self._joint_states.effort = [0.] * self._num_joints
 
-        # publish the initial end effector target odometry message
-        self._end_effector_target_publisher
+        # Publish initial joint states target
+        msg = Float64MultiArray()
+        self._joint_states.position = self._panda.reset_model()
+        msg.data = self._joint_states.position
+        self._joint_commands_publisher.publish(msg)
+
+        # Set an end effector target
+        self._panda.set_joint_states(self._joint_states)
+        self._end_effector_target = self._panda.end_effector_pose(self._joint_states.position)
+        self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
     def setup_joint_group_effort_controller(self):
 
@@ -90,7 +91,7 @@ class PandaPickAndPlace(Node):
             self._d_gains[i] = self._response.values[2]
 
     def callback_joint_states(self, joint_states):
-        
+
         self._panda.set_joint_states(joint_states)
         self._joint_states = joint_states
 
@@ -98,10 +99,10 @@ class PandaPickAndPlace(Node):
 
     def joint_group_position_controller_callback(self) -> None:
 
+        self._panda.set_joint_states(self._joint_states)
         if self.end_effector_reached():
             # sample a new end effector target
             self.sample_end_effector_target()
-            self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
         self.get_logger().info('JOINT TARGETS: {}'.format(self._joint_targets))
 
@@ -111,10 +112,10 @@ class PandaPickAndPlace(Node):
 
     def joint_group_effort_controller_callback(self) -> None:
         
+        self._panda.set_joint_states(self._joint_states)
         if self.end_effector_reached():
             # sample a new end effector target
             self.sample_end_effector_target()
-            self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
         # compute the effort from 
         err = self._joint_targets - self._joint_states.position
@@ -134,7 +135,7 @@ class PandaPickAndPlace(Node):
                             max_error_vel: float = 0.5,
                             mask: np.ndarray = np.array([1., 1., 1.])) -> bool:
         
-        current_end_effector_pose = self._panda.end_effector_pose()
+        current_end_effector_pose = self._panda.end_effector_pose(self._joint_states.position)
         position = np.array([
             current_end_effector_pose.pose.pose.position.x,
             current_end_effector_pose.pose.pose.position.y,
@@ -187,19 +188,21 @@ class PandaPickAndPlace(Node):
 
         quat_xyzw = R.from_euler('xyz', [r, p, y], degrees=False).as_quat()
         self._end_effector_target.pose.pose.orientation.x = quat_xyzw[0]
-        self._end_effector_target.pose.pose.orientation.x = quat_xyzw[1]
-        self._end_effector_target.pose.pose.orientation.x = quat_xyzw[2]
-        self._end_effector_target.pose.pose.orientation.x = quat_xyzw[3]
+        self._end_effector_target.pose.pose.orientation.y = quat_xyzw[1]
+        self._end_effector_target.pose.pose.orientation.z = quat_xyzw[2]
+        self._end_effector_target.pose.pose.orientation.w = quat_xyzw[3]
 
-        print("End effector target set to [x, y z]=[{}, {}, {}], [r, p , y]=[{}, {}, {}]".format(
+        self.get_logger().info("END EFFECTOR TARGET SET TO [x, y z]=[{}, {}, {}], [r, p , y]=[{}, {}, {}]".format(
             self._end_effector_target.pose.pose.position.x,
             self._end_effector_target.pose.pose.position.y,
             self._end_effector_target.pose.pose.position.z,
             r, p, y
         ))
 
+        self._joint_targets = self._panda.solve_ik(self._end_effector_target)
+
         self._end_effector_target_publisher.publish(self._end_effector_target)
-        self._end_effector_pose_publisher.publish(self._panda.end_effector_pose())
+        self._end_effector_pose_publisher.publish(self._panda.end_effector_pose(self._joint_states.position))
 
 def main(args=None):
     rclpy.init(args=args)

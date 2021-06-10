@@ -8,7 +8,7 @@ controller_manager:
 
     joint_group_position_controller:
         ros__parameters:
-          type: effort_controllers/JointGroupPositionController # publish the effort directly as an output of the PID controller; TODO: make a joint_group_position_controllers compatible with ROS2
+          type: effort_controllers/JointGroupPositionController
 
 /joint_group_position_controller:
   ros__parameters:

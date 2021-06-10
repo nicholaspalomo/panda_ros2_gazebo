@@ -79,10 +79,11 @@ class Panda():
         for joint_idx in range(self._articulated_system.getNrOfJoints()):
             joint_name = self._articulated_system.getJointName(joint_idx)
 
+            self._node_handle.get_logger().info('JOINT NAME: {} JOINT INDEX: {}'.format(joint_name, joint_idx))
+
             # Get the names of joints to be included in optimization. Joint names containing the 'exclude tag' (e.g. the fingers) should not be considered by the IK algorithm
             joint_obj = self._articulated_system.getJoint(joint_idx)
             if joint_obj.enablePosLimits(True): # can't enable joint limits for a fixed joint; so this method will return 'False'
-                self._node_handle.get_logger().info('JOINT NAME: %s' % joint_name)
                 if self._finger_joint_tag in joint_name:
                     # Get the joint names from the model
                     self._joint_names.append(joint_name)
@@ -125,11 +126,11 @@ class Panda():
         self._srv_gazebo_unpause = self._node_handle.create_client(Empty, '/gazebo/unpause_physics')
         self._srv_set_model_state = self._node_handle.create_client(SetEntityState, '/gazebo/set_entity_state')
 
-    def end_effector_pose(self) -> Odometry:
+    def end_effector_pose(self, joint_positions: List[float]) -> Odometry:
         """ Returns an end effector odometry message """
 
         # Update the IK model
-        self.update_config(self._ik)
+        self.update_robot_configuration(self._ik, joint_positions)
 
         # get the end effector pose from the kinematic model
         end_effector_pose_in_base_frame = self._fk.get_relative_transform(self.base_frame, self.end_effector_frame)
@@ -138,9 +139,9 @@ class Panda():
         J = self._fk.get_frame_jacobian(self.end_effector_frame)
 
         self._node_handle.get_logger().info('END EFFECTOR JACOBIAN: {}'.format(J))
-        
+
         # compose the joint velocity vector for determining the end effector pose using the end effector Jacobian
-        num_joints = self._articulated_system.getNrOfJoints() + 1 # '+1' here because this includes the fix joint between the robot and the 'world', I guess...
+        num_joints = self._articulated_system.getNrOfJoints() + 1 # '+1' here because this includes the fixed joint between the robot and the 'world', I guess...
         joint_velocities = np.zeros((num_joints,))
         j = 0
         for i in range(num_joints):
@@ -213,7 +214,7 @@ class Panda():
                     constraints_tolerance=1E-8,
                     base_frame=self.base_frame)
 
-        self.update_config(ik)
+        self.update_robot_configuration(ik, self._joint_states.position)
 
         # Add the cartesian target of the end effector
         ik.add_target(frame_name=self.end_effector_frame,
@@ -222,7 +223,7 @@ class Panda():
 
         return ik
 
-    def update_config(self, ik: inverse_kinematics_nlp.InverseKinematicsNLP):
+    def update_robot_configuration(self, ik: inverse_kinematics_nlp.InverseKinematicsNLP, joint_positions: List[float]):
 
         # Set the current configuration
         ik.set_current_robot_configuration(
@@ -232,7 +233,7 @@ class Panda():
                 self.base_orientation.y, 
                 self.base_orientation.z, 
                 self.base_orientation.w]),
-            joint_configuration=np.array(self.joint_positions))
+            joint_configuration=np.array(joint_positions))
 
     def solve_ik(self, target_pose: Odometry) -> np.ndarray:
 
@@ -294,7 +295,7 @@ class Panda():
         self._joint_states = joint_states
 
     @property
-    def joint_positions(self) -> np.ndarray:
+    def joint_positions(self) -> List[float]:
 
         return self._joint_states.position
 
