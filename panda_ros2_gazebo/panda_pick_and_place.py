@@ -59,7 +59,7 @@ class PandaPickAndPlace(Node):
 
         # Set an end effector target
         self._panda.set_joint_states(self._joint_states)
-        self._end_effector_target = self._panda.end_effector_pose(self._joint_states.position)
+        self._end_effector_target = self._panda.solve_fk(self._joint_states.position)
         self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
     def setup_joint_group_effort_controller(self):
@@ -135,7 +135,7 @@ class PandaPickAndPlace(Node):
                             max_error_vel: float = 0.5,
                             mask: np.ndarray = np.array([1., 1., 1.])) -> bool:
         
-        current_end_effector_pose = self._panda.end_effector_pose(self._joint_states.position)
+        current_end_effector_pose = self._panda.solve_fk(self._joint_states.position)
         position = np.array([
             current_end_effector_pose.pose.pose.position.x,
             current_end_effector_pose.pose.pose.position.y,
@@ -202,7 +202,7 @@ class PandaPickAndPlace(Node):
         self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
         self._end_effector_target_publisher.publish(self._end_effector_target)
-        self._end_effector_pose_publisher.publish(self._panda.end_effector_pose(self._joint_states.position))
+        self._end_effector_pose_publisher.publish(self._panda.solve_fk(self._joint_states.position))
 
 def main(args=None):
     rclpy.init(args=args)

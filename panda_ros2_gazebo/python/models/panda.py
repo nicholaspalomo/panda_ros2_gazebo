@@ -126,7 +126,7 @@ class Panda():
         self._srv_gazebo_unpause = self._node_handle.create_client(Empty, '/gazebo/unpause_physics')
         self._srv_set_model_state = self._node_handle.create_client(SetEntityState, '/gazebo/set_entity_state')
 
-    def end_effector_pose(self, joint_positions: List[float]) -> Odometry:
+    def solve_fk(self, joint_positions: List[float]) -> Odometry:
         """ Returns an end effector odometry message """
 
         # Update the IK model
