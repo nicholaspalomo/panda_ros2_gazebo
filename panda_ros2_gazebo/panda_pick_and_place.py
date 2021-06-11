@@ -138,8 +138,7 @@ class PandaPickAndPlace(Node):
         self._end_effector_pose_publisher.publish(end_effector_current_msg)
 
         # Update the RViz helper and publish
-        self._rviz_helper.set_pose_msg(end_effector_current_msg)
-        self._rviz_helper.publish()
+        self._rviz_helper.publish(end_effector_current_msg)
 
         msg = Float64MultiArray()
         msg.data = list(self._joint_targets)
@@ -161,8 +160,7 @@ class PandaPickAndPlace(Node):
         self._end_effector_pose_publisher.publish(end_effector_current_msg)
 
         # Update the RViz helper and publish
-        self._rviz_helper.set_pose_msg(end_effector_current_msg)
-        self._rviz_helper.publish()
+        self._rviz_helper.publish(end_effector_current_msg)
 
         # compute the effort from 
         err = self._joint_targets - self._joint_states.position
