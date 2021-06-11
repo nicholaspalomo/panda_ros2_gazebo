@@ -65,7 +65,24 @@ You will see the arm start to move around, going from setpoint to setpoint.
 
 ## Repository Structure
 
-
+```bash
+├── config                      # YAML configuration files
+├── description                 # Panda description and world files
+    ├── models                  # Robot URDFs and meshes
+        └── panda               # Panda URDF and meshes
+            └── meshes          # Panda meshes
+                ├── collision   # Collision meshes
+                └── visual      # Visual meshes
+    └── worlds                  # Panda world definitions
+├── launch                      # ROS launch scripts
+├── panda_ros2_gazebo           # Node definition and IK scripts
+    └── scripts                 # IK scripts
+        ├── model               # Panda forward/inverse kinematic model
+        └── rbd                 # Rigid body dynamics utility scripts and class definitions
+            └── idyntree        # Python interface for iDyntree bindings
+├── resource                    # Resource directory for ROS2
+└── rviz                        # RViz configuration
+```
 
 ## Contributing
 
