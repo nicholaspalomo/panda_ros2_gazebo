@@ -228,13 +228,18 @@ class Panda():
 
     def solve_ik(self, target_pose: Odometry) -> np.ndarray:
 
-        target_position = np.array([target_pose.pose.pose.position.x, target_pose.pose.pose.position.y, target_pose.pose.pose.position.z])
+        rot = np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]])
 
+        target_position = np.array([target_pose.pose.pose.position.x, target_pose.pose.pose.position.y, target_pose.pose.pose.position.z])
         target_position = np.matmul(
-            np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]]), 
+            rot, 
             target_position[:, np.newaxis]).squeeze()
 
-        quat_xyzw = np.array([target_pose.pose.pose.orientation.x, target_pose.pose.pose.orientation.y, target_pose.pose.pose.orientation.z, target_pose.pose.pose.orientation.w])
+        target_orientation = R.from_quat([target_pose.pose.pose.orientation.x, target_pose.pose.pose.orientation.y, target_pose.pose.pose.orientation.z, target_pose.pose.pose.orientation.w]).as_matrix()
+        target_orientation = np.matmul(
+            rot, 
+            target_orientation)
+        quat_xyzw = R.from_matrix(target_orientation).as_quat()
 
         # quat_xyzw = R.from_euler(seq="y", angles=90, degrees=True).as_quat()
 
