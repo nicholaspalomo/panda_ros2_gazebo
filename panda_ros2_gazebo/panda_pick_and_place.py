@@ -130,6 +130,17 @@ class PandaPickAndPlace(Node):
             self.get_logger().info('END EFFECTOR TARGET REACHED!')
             self.sample_end_effector_target()
 
+        # Publish the end effector target and odometry messages
+        end_effector_target_msg = copy.deepcopy(self._end_effector_target)
+        end_effector_current_msg = copy.deepcopy(self._end_effector_current)
+
+        self._end_effector_target_publisher.publish(end_effector_target_msg)
+        self._end_effector_pose_publisher.publish(end_effector_current_msg)
+
+        # Update the RViz helper and publish
+        self._rviz_helper.set_pose_msg(end_effector_current_msg)
+        self._rviz_helper.publish()
+
         msg = Float64MultiArray()
         msg.data = list(self._joint_targets)
         self._joint_commands_publisher.publish(msg)
@@ -141,6 +152,17 @@ class PandaPickAndPlace(Node):
             # sample a new end effector target
             self.get_logger().info('END EFFECTOR TARGET REACHED!')
             self.sample_end_effector_target()
+
+        # Publish the end effector target and odometry messages
+        end_effector_target_msg = copy.deepcopy(self._end_effector_target)
+        end_effector_current_msg = copy.deepcopy(self._end_effector_current)
+
+        self._end_effector_target_publisher.publish(end_effector_target_msg)
+        self._end_effector_pose_publisher.publish(end_effector_current_msg)
+
+        # Update the RViz helper and publish
+        self._rviz_helper.set_pose_msg(end_effector_current_msg)
+        self._rviz_helper.publish()
 
         # compute the effort from 
         err = self._joint_targets - self._joint_states.position
@@ -208,10 +230,6 @@ class PandaPickAndPlace(Node):
 
         end_effector_reached &= np.pi - np.linalg.norm(rot_vec) < max_error_rot and np.linalg.norm(velocity[3:]) < max_error_vel
 
-        # Update the RViz helper and publish
-        self._rviz_helper.set_pose_msg(self._end_effector_current)
-        self._rviz_helper.publish()
-
         return end_effector_reached
 
     def sample_end_effector_target(self) -> Odometry:
@@ -247,13 +265,6 @@ class PandaPickAndPlace(Node):
             self._joint_targets[-2:] = self._panda.move_fingers(list(self._joint_targets), FingersAction.OPEN)[-2:]
         else:
             self._joint_targets[-2:] = self._panda.move_fingers(list(self._joint_targets), FingersAction.CLOSE)[-2:]
-
-        # Publish the end effector target and odometry messages
-        end_effector_target_msg = copy.deepcopy(self._end_effector_target)
-        end_effector_current_msg = copy.deepcopy(self._end_effector_current)
-
-        self._end_effector_target_publisher.publish(end_effector_target_msg)
-        self._end_effector_pose_publisher.publish(end_effector_current_msg)
 
 def main(args=None):
     rclpy.init(args=args)

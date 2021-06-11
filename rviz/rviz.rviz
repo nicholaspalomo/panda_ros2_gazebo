@@ -3,16 +3,7 @@ Panels:
     Help Height: 87
     Name: Displays
     Property Tree Widget:
-      Expanded:
-        - /Global Options1
-        - /RobotModel1
-        - /Pose1
-        - /Path1
-        - /Path1/Offset1
-        - /Odometry1
-        - /Odometry1/Shape1
-        - /Odometry2
-        - /Odometry2/Shape1
+      Expanded: ~
       Splitter Ratio: 0.5
     Tree Height: 778
   - Class: rviz_common/Selection
@@ -140,25 +131,6 @@ Visualization Manager:
       Value: true
       Visual Enabled: true
     - Alpha: 1
-      Axes Length: 1
-      Axes Radius: 0.10000000149011612
-      Class: rviz_default_plugins/Pose
-      Color: 255; 25; 0
-      Enabled: true
-      Head Length: 0.019999999552965164
-      Head Radius: 0.009999999776482582
-      Name: Pose
-      Shaft Length: 0.10000000149011612
-      Shaft Radius: 0.004999999888241291
-      Shape: Arrow
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /end_effector_target_pose
-      Value: true
-    - Alpha: 1
       Buffer Length: 1
       Class: rviz_default_plugins/Path
       Color: 25; 255; 0
@@ -240,7 +212,7 @@ Visualization Manager:
           Scale: 1
           Value: true
         Value: true
-      Enabled: true
+      Enabled: false
       Keep: 5
       Name: Odometry
       Position Tolerance: 0.10000000149011612
@@ -260,7 +232,7 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /end_effector_pose
-      Value: true
+      Value: false
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -319,10 +291,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.2503986954689026
+      Pitch: 0.4503988027572632
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 4.974530220031738
+      Yaw: 6.259532928466797
     Saved: ~
 Window Geometry:
   Displays:

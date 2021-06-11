@@ -26,10 +26,9 @@ class RVizHelper():
 
         self._counter = min(self._counter, self._max_msgs)
         if self._counter >= self._max_msgs:
-            self._end_effector_target_pose_msg[:-1] = self._end_effector_target_pose_msg[1:]
-        else:
-            self._end_effector_target_pose_msg.append(PoseStamped())
+            self._end_effector_target_pose_msg.pop(0)
 
+        self._end_effector_target_pose_msg.append(PoseStamped())
         self._end_effector_target_pose_msg[-1].header = copy.deepcopy(nav_msg.header)
         self._end_effector_target_pose_msg[-1].pose = copy.deepcopy(nav_msg.pose.pose)
 
