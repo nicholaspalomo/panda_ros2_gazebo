@@ -2,6 +2,8 @@
 
 This project demonstrates ROS2 functionalities for a simulation of the Panda robotic manipulator by Franka Emika. The simulation includes both a visualization of the Panda in Gazebo as well as in RViz. The control algorithm features an inverse kinematics (IK) joint trajectory planner in order to reach a desired end effector target pose. Joint group position controllers from the ROS2 controllers library are used with an effort interface to the Panda's joints in order to reach the desired joint angle targets computed from IK. Target poses for the end effector are sampled at random continuously.
 
+![Alt Text](media/rviz.gif)
+
 ## Installation
 
 First, please ensure that your system meets the basic requirements to build and run the simulation:
