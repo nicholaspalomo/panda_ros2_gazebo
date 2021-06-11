@@ -208,8 +208,8 @@ class PandaPickAndPlace(Node):
         masked_target = mask * target
         masked_current = mask * position
 
-        end_effector_reached = np.linalg.norm(masked_current - masked_target) < max_error_pos and \
-            np.linalg.norm(velocity[:3]) < max_error_vel
+        end_effector_reached = (np.linalg.norm(masked_current - masked_target) < max_error_pos) and \
+            (np.linalg.norm(velocity[:3]) < max_error_vel)
 
         # Check the orientation to see if the target has been reached
         orientation = np.array([
@@ -228,7 +228,7 @@ class PandaPickAndPlace(Node):
         orientation_diff = quat_mult(orientation, target_inv)
         rot_vec = R.from_quat(orientation_diff).as_rotvec()
 
-        end_effector_reached &= np.pi - np.linalg.norm(rot_vec) < max_error_rot and np.linalg.norm(velocity[3:]) < max_error_vel
+        end_effector_reached = end_effector_reached and (np.pi - np.linalg.norm(rot_vec) < max_error_rot) and (np.linalg.norm(velocity[3:]) < max_error_vel)
 
         return end_effector_reached
 
