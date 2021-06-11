@@ -21,6 +21,7 @@ from rcl_interfaces.srv import GetParameters
 
 # Panda kinematic model
 from .scripts.models.panda import Panda, FingersAction
+from .rviz_helper import RVizHelper
 
 # Configure numpy output
 np.set_printoptions(precision=4, suppress=True)
@@ -84,6 +85,9 @@ class PandaPickAndPlace(Node):
         self._end_effector_target = self._panda.solve_fk(self._joint_states.position)
         self._joint_targets = self._panda.solve_ik(self._end_effector_target)
         self._end_effector_current = Odometry()
+
+        # Create the RViz helper for visualizing the waypoints and trajectories
+        self._rviz_helper = RVizHelper(self)
 
     def setup_joint_group_effort_controller(self):
 
@@ -203,6 +207,10 @@ class PandaPickAndPlace(Node):
         rot_vec = R.from_quat(orientation_diff).as_rotvec()
 
         end_effector_reached &= np.pi - np.linalg.norm(rot_vec) < max_error_rot and np.linalg.norm(velocity[3:]) < max_error_vel
+
+        # Update the RViz helper and publish
+        self._rviz_helper.set_pose_msg(self._end_effector_current)
+        self._rviz_helper.publish()
 
         return end_effector_reached
 
