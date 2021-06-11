@@ -128,6 +128,10 @@ class Panda():
     def solve_fk(self, joint_positions: List[float], joint_velocities: List[float]) -> Odometry:
         """ Returns an end effector odometry message """
 
+        # Update the robot state
+        dofs = self._fk.kindyn.model().getNrOfDOFs()
+        self._fk.set_robot_state(np.array(joint_positions[:dofs]), np.array(joint_velocities[:dofs]), world_gravity=np.array([0., 0., -9.816]))
+
         # Update the IK model
         self.update_robot_configuration(self._ik, joint_positions)
 
