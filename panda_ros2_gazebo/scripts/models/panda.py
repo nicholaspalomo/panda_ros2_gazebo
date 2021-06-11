@@ -100,23 +100,7 @@ class Panda():
 
         self._finger_joint_limits = dict(zip(self._finger_joint_names, self._finger_joint_limits))
 
-        # Initial joint targets
-        self._initial_joint_position_targets = self._node_handle.get_parameter('initial_joint_angles').value
-        self._initial_joint_position_targets = self.move_fingers(self._initial_joint_position_targets, FingersAction.OPEN)
-
         self._fk = kindyncomputations.KinDynComputations(self._urdf, considered_joints=list(self._arm_joint_names.values()), velocity_representation=FrameVelocityRepresentation.INERTIAL_FIXED_REPRESENTATION)
-
-        # create containers for the joint position, velocity, effort
-        self._joint_states = JointState()
-        self._joint_states.position = self._initial_joint_position_targets
-        self._joint_states.velocity = [0.] * len(self._joint_names)
-        self._joint_states.effort = [0.] * len(self._joint_names)
-
-        self._end_effector_odom = Odometry()
-        self._end_effector_odom.header.stamp = self._node_handle.get_clock().now().to_msg()
-        self._end_effector_odom.header.frame_id = self.base_frame
-        self._end_effector_odom.child_frame_id = self.end_effector_frame
-        self._end_effector_odom.pose.pose.orientation.w = 1.0 # so that orientation is a unit quaternion
 
         # Create the inverse kinematics model
         self._ik = self._get_panda_ik(self.joint_names)
@@ -125,11 +109,11 @@ class Panda():
         self._srv_gazebo_unpause = self._node_handle.create_client(Empty, '/gazebo/unpause_physics')
         self._srv_set_model_state = self._node_handle.create_client(SetEntityState, '/gazebo/set_entity_state')
 
-    def solve_fk(self, joint_positions: List[float]) -> Odometry:
+    def solve_fk(self, joint_states: JointState, end_effector_odom: Odometry):
         """ Returns an end effector odometry message """
 
         # Update the IK model
-        self.update_robot_configuration(self._ik, joint_positions)
+        self.update_robot_configuration(joint_states.position)
 
         # get the end effector pose from the kinematic model
         end_effector_pose_in_base_frame = self._fk.get_relative_transform(self.base_frame, self.end_effector_frame)
@@ -143,11 +127,11 @@ class Panda():
         j = 0
         for i in range(num_joints):
             if i in self._arm_joint_names.keys():
-                joint_velocities[i] = self._joint_states.velocity[j]
+                joint_velocities[i] = joint_states.velocity[j]
                 j += 1
 
             if i in self._finger_joint_names.keys():
-                joint_velocities[i] = self._joint_states.velocity[j]
+                joint_velocities[i] = joint_states.velocity[j]
                 j += 1
 
         end_effector_twist = np.matmul(J, joint_velocities[:, np.newaxis]).squeeze()
@@ -167,7 +151,7 @@ class Panda():
 
         end_effector_pose_msg.pose = pose
 
-        self._end_effector_odom.pose = end_effector_pose_msg
+        end_effector_odom.pose = end_effector_pose_msg
 
         end_effector_twist_msg = TwistWithCovariance()
         twist = Twist()
@@ -183,11 +167,11 @@ class Panda():
 
         end_effector_twist_msg.twist = twist
 
-        self._end_effector_odom.twist = end_effector_twist_msg
+        end_effector_odom.twist = end_effector_twist_msg
         
-        self._end_effector_odom.header.stamp = self._node_handle.get_clock().now().to_msg()
-
-        return self._end_effector_odom
+        end_effector_odom.header.stamp = self._node_handle.get_clock().now().to_msg()
+        end_effector_odom.header.frame_id = self.base_frame
+        end_effector_odom.child_frame_id = self.end_effector_frame
 
     def _get_panda_ik(self, optimized_joints: List[str]) -> \
         inverse_kinematics_nlp.InverseKinematicsNLP:
@@ -205,8 +189,6 @@ class Panda():
                     constraints_tolerance=1E-8,
                     base_frame=self.base_frame)
 
-        self.update_robot_configuration(ik, self._joint_states.position)
-
         # Add the cartesian target of the end effector
         ik.add_target(frame_name=self.end_effector_frame,
                     target_type=inverse_kinematics_nlp.TargetType.POSE,
@@ -214,10 +196,10 @@ class Panda():
 
         return ik
 
-    def update_robot_configuration(self, ik: inverse_kinematics_nlp.InverseKinematicsNLP, joint_positions: List[float]):
+    def update_robot_configuration(self, joint_positions: List[float]):
 
         # Set the current configuration
-        ik.set_current_robot_configuration(
+        self._ik.set_current_robot_configuration(
             base_position=np.array([self.base_position.x, self.base_position.y, self.base_position.z]),
             base_quaternion=np.array([
                 self.base_orientation.x, 
@@ -226,7 +208,7 @@ class Panda():
                 self.base_orientation.w]),
             joint_configuration=np.array(joint_positions))
 
-    def solve_ik(self, target_pose: Odometry) -> np.ndarray:
+    def solve_ik(self, target_pose: Odometry, target_joint_state: JointState) -> np.ndarray:
 
         rot = np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]])
 
@@ -251,28 +233,21 @@ class Panda():
         # Run the IK
         self._ik.solve()
 
-        return self._ik.get_reduced_solution().joint_configuration
+        target_joint_state.position = list(self._ik.get_reduced_solution().joint_configuration)
+        target_joint_state.header.stamp = self._node_handle.get_clock().now().to_msg()
+        target_joint_state.name = self.joint_names
 
-    def reset_model(self) -> np.ndarray:
-
-        self._node_handle.get_logger().info('RESETTING THE JOINT ANGLES...')
-        self._node_handle.get_logger().info('INITIAL JOIN ANGLES:\n{}'.format(self._initial_joint_position_targets))
-
-        return self._initial_joint_position_targets
-
-    def move_fingers(self, joint_positions: List[float], action: FingersAction = FingersAction.OPEN):
+    def move_fingers(self, joint_states: JointState, action: FingersAction = FingersAction.OPEN):
         # Returns a vector of joint positions in which the fingers are 'OPEN' or 'CLOSED', depending on the value of 'action'
 
         for finger_idx, finger_limits in self.finger_joint_limits.items():
             if action is FingersAction.OPEN:
-                joint_positions[finger_idx] = finger_limits[1]
+                joint_states.position[finger_idx] = finger_limits[1]
                 self._node_handle.get_logger().info('OPENING THE GRIPPER...')
 
             if action is FingersAction.CLOSE:
-                joint_positions[finger_idx] = finger_limits[0]
+                joint_states.position[finger_idx] = finger_limits[0]
                 self._node_handle.get_logger().info('CLOSING THE GRIPPER...')
-
-        return joint_positions.copy()
 
     @property
     def num_joints(self) -> int:
@@ -298,20 +273,6 @@ class Panda():
     def base_orientation(self) -> Quaternion:
 
         return self._base_orientation
-
-    @property
-    def joint_states(self) -> JointState:
-
-        return self._joint_states
-
-    def set_joint_states(self, joint_states: JointState):
-
-        self._joint_states = joint_states
-
-    @property
-    def joint_positions(self) -> List[float]:
-
-        return self._joint_states.position
 
     @property
     def joint_names(self) -> List[str]:

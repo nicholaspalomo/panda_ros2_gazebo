@@ -70,21 +70,22 @@ class PandaPickAndPlace(Node):
         self._panda = Panda(self)
         self._num_joints = self._panda.num_joints
 
+        # Publish initial joint states target
         self._joint_states = JointState()
+        self._joint_states.position = self.get_parameter('initial_joint_angles').value
         self._joint_states.velocity = [0.] * self._num_joints
         self._joint_states.effort = [0.] * self._num_joints
+        self._panda.move_fingers(self._joint_states, FingersAction.OPEN)
+        self._joint_targets = copy.deepcopy(self._joint_states)
 
-        # Publish initial joint states target
         msg = Float64MultiArray()
-        self._joint_states.position = self._panda.reset_model()
         msg.data = self._joint_states.position
         self._joint_commands_publisher.publish(msg)
 
         # Set an end effector target
-        self._panda.set_joint_states(self._joint_states)
-        self._end_effector_target = self._panda.solve_fk(self._joint_states.position)
-        self._joint_targets = self._panda.solve_ik(self._end_effector_target)
         self._end_effector_current = Odometry()
+        self._end_effector_target = Odometry()
+        self._panda.solve_fk(self._joint_states, self._end_effector_target)
 
         # Create the RViz helper for visualizing the waypoints and trajectories
         self._rviz_helper = RVizHelper(self)
@@ -119,50 +120,34 @@ class PandaPickAndPlace(Node):
 
     def callback_joint_states(self, joint_states):
 
-        self._panda.set_joint_states(joint_states)
         self._joint_states = joint_states
+
+        self._panda.solve_ik(self._end_effector_target, self._joint_targets)
+        self._panda.solve_fk(self._joint_states, self._end_effector_current)
+        if self.end_effector_reached():
+            # sample a new end effector target
+            self.get_logger().info('END EFFECTOR TARGET REACHED!')
+            self.sample_end_effector_target()
+
+        self.get_logger().info("END EFFECTOR CURRENT\n{}".format(self._end_effector_current.pose.pose.position))
+        self.get_logger().info("END EFFECTOR TARGET\n{}".format(self._end_effector_target.pose.pose.position))
+
+        # Publish the end effector target and odometry messages
+        self._end_effector_target_publisher.publish(self._end_effector_target)
+        self._end_effector_pose_publisher.publish(self._end_effector_current)
+
+        # Update the RViz helper and publish
+        self._rviz_helper.publish(self._end_effector_current)
 
     def joint_group_position_controller_callback(self) -> None:
 
-        self._panda.set_joint_states(self._joint_states)
-        if self.end_effector_reached():
-            # sample a new end effector target
-            self.get_logger().info('END EFFECTOR TARGET REACHED!')
-            self.sample_end_effector_target()
-
-        # Publish the end effector target and odometry messages
-        end_effector_target_msg = copy.deepcopy(self._end_effector_target)
-        end_effector_current_msg = copy.deepcopy(self._end_effector_current)
-
-        self._end_effector_target_publisher.publish(end_effector_target_msg)
-        self._end_effector_pose_publisher.publish(end_effector_current_msg)
-
-        # Update the RViz helper and publish
-        self._rviz_helper.publish(end_effector_current_msg)
-
         msg = Float64MultiArray()
-        msg.data = list(self._joint_targets)
+        msg.data = self._joint_targets.position
         self._joint_commands_publisher.publish(msg)
 
     def joint_group_effort_controller_callback(self) -> None:
-        
-        self._panda.set_joint_states(self._joint_states)
-        if self.end_effector_reached():
-            # sample a new end effector target
-            self.get_logger().info('END EFFECTOR TARGET REACHED!')
-            self.sample_end_effector_target()
 
-        # Publish the end effector target and odometry messages
-        end_effector_target_msg = copy.deepcopy(self._end_effector_target)
-        end_effector_current_msg = copy.deepcopy(self._end_effector_current)
-
-        self._end_effector_target_publisher.publish(end_effector_target_msg)
-        self._end_effector_pose_publisher.publish(end_effector_current_msg)
-
-        # Update the RViz helper and publish
-        self._rviz_helper.publish(end_effector_current_msg)
-
-        # compute the effort from 
+        # compute the effort from PID control law
         err = self._joint_targets - self._joint_states.position
         self._int_err += self._control_dt * err
         deriv_err = (err - self._err) / self._control_dt
@@ -172,19 +157,16 @@ class PandaPickAndPlace(Node):
         self._err = err
 
         msg = Float64MultiArray()
-        msg.data = self._effort.copy()
+        msg.data = list(self._effort.copy())
         self._joint_commands_publisher.publish(msg)
 
     def end_effector_reached(self,
-                            max_error_pos: float = 0.05,
-                            max_error_rot: float = 0.05,
-                            max_error_vel: float = 0.1,
+                            max_error_pos: float = 0.1,
+                            max_error_rot: float = 0.1,
+                            max_error_vel: float = 0.05,
                             mask: np.ndarray = np.array([1., 1., 1.])) -> bool:
         
         # TODO: Visualize the position target markers in RViz 
-
-        # Calculate the end effector location relative to the base from inverse kinematics
-        self._end_effector_current = self._panda.solve_fk(self._joint_states.position)
 
         # Check the position to see if the target has been reached
         position = np.array([
@@ -256,13 +238,11 @@ class PandaPickAndPlace(Node):
             r, p, y
         ))
 
-        self._joint_targets = self._panda.solve_ik(self._end_effector_target)
-
         # Sample whether or not the fingers should be open or closed
         if random.random() > 0.5:
-            self._joint_targets[-2:] = self._panda.move_fingers(list(self._joint_targets), FingersAction.OPEN)[-2:]
+            self._panda.move_fingers(self._joint_targets, FingersAction.OPEN)
         else:
-            self._joint_targets[-2:] = self._panda.move_fingers(list(self._joint_targets), FingersAction.CLOSE)[-2:]
+            self._panda.move_fingers(self._joint_targets, FingersAction.CLOSE)
 
 def main(args=None):
     rclpy.init(args=args)
