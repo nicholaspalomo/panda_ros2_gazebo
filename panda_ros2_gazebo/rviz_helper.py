@@ -37,7 +37,9 @@ class RVizHelper():
         self._end_effector_trajectory_msg.header = nav_msg.header
         self._end_effector_trajectory_msg.poses = self._end_effector_target_pose_msg
 
-    def publish(self):
+    def publish(self, nav_msg: Odometry):
+
+        self.set_pose_msg(nav_msg)
 
         msg_pose = copy.deepcopy(self._end_effector_target_pose_msg[-1])
         msg_path = copy.deepcopy(self._end_effector_trajectory_msg)
