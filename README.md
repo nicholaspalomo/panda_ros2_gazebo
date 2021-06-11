@@ -16,6 +16,7 @@ This project depends [iDynTree](https://github.com/robotology/idyntree) library 
 ```
 sudo apt-get install libeigen3-dev libxml2-dev coinor-libipopt-dev qtbase5-dev qtdeclarative5-dev qtmultimedia5-dev qml-module-qtquick2 qml-module-qtquick-window2 qml-module-qtmultimedia qml-module-qtquick-dialogs qml-module-qtquick-controls qml-module-qt-labs-folderlistmodel qml-module-qt-labs-settings
 ```
+If you're not running Debian/Ubuntu on your machine, please consult the platform-specific installation instructions [here](https://github.com/robotology/idyntree#installation).
 
 Then, proceed to build and install iDynTree as follows. You also need a working `swig` installation on your machine as well as an up-to-date installation of `scipy`. Don't forget to use the `IDYNTREE_USES_IPOPT` flag when running the `cmake` command!
 
