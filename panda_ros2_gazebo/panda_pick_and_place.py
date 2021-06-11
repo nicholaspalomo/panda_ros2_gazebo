@@ -65,7 +65,6 @@ class PandaPickAndPlace(Node):
         self._end_effector_pose_publisher = self.create_publisher(Odometry, self.get_parameter('end_effector_pose_topic').value, 10)
         self._joint_states_subscriber = self.create_subscription(JointState, '/joint_states', self.callback_joint_states, 10)
         self._control_dt = self.get_parameter('control_dt').value
-        self._control_callback_timer = self.create_timer(self._control_dt, self.joint_group_position_controller_callback)
 
         self._panda = Panda(self)
         self._num_joints = self._panda.num_joints
@@ -81,8 +80,7 @@ class PandaPickAndPlace(Node):
         self._joint_commands_publisher.publish(msg)
 
         # Set an end effector target
-        self._panda.set_joint_states(self._joint_states)
-        self._end_effector_target = self._panda.solve_fk(self._joint_states.position)
+        self._end_effector_target = self._panda.solve_fk(self._joint_states.position, self._joint_states.velocity)
         self._joint_targets = self._panda.solve_ik(self._end_effector_target)
         self._end_effector_current = Odometry()
 
@@ -119,48 +117,32 @@ class PandaPickAndPlace(Node):
 
     def callback_joint_states(self, joint_states):
 
-        self._panda.set_joint_states(joint_states)
         self._joint_states = joint_states
 
-    def joint_group_position_controller_callback(self) -> None:
+        # Calculate the end effector location relative to the base from inverse kinematics
+        self._end_effector_current = self._panda.solve_fk(self._joint_states.position, self._joint_states.velocity)
 
-        self._panda.set_joint_states(self._joint_states)
         if self.end_effector_reached():
             # sample a new end effector target
             self.get_logger().info('END EFFECTOR TARGET REACHED!')
             self.sample_end_effector_target()
 
         # Publish the end effector target and odometry messages
-        end_effector_target_msg = copy.deepcopy(self._end_effector_target)
-        end_effector_current_msg = copy.deepcopy(self._end_effector_current)
-
-        self._end_effector_target_publisher.publish(end_effector_target_msg)
-        self._end_effector_pose_publisher.publish(end_effector_current_msg)
+        self._end_effector_target_publisher.publish(self._end_effector_target)
+        self._end_effector_pose_publisher.publish(self._end_effector_current)
 
         # Update the RViz helper and publish
-        self._rviz_helper.publish(end_effector_current_msg)
+        self._rviz_helper.publish(self._end_effector_current)
+
+        self.joint_group_position_controller_callback()
+
+    def joint_group_position_controller_callback(self) -> None:
 
         msg = Float64MultiArray()
         msg.data = list(self._joint_targets)
         self._joint_commands_publisher.publish(msg)
 
     def joint_group_effort_controller_callback(self) -> None:
-        
-        self._panda.set_joint_states(self._joint_states)
-        if self.end_effector_reached():
-            # sample a new end effector target
-            self.get_logger().info('END EFFECTOR TARGET REACHED!')
-            self.sample_end_effector_target()
-
-        # Publish the end effector target and odometry messages
-        end_effector_target_msg = copy.deepcopy(self._end_effector_target)
-        end_effector_current_msg = copy.deepcopy(self._end_effector_current)
-
-        self._end_effector_target_publisher.publish(end_effector_target_msg)
-        self._end_effector_pose_publisher.publish(end_effector_current_msg)
-
-        # Update the RViz helper and publish
-        self._rviz_helper.publish(end_effector_current_msg)
 
         # compute the effort from 
         err = self._joint_targets - self._joint_states.position
@@ -182,9 +164,6 @@ class PandaPickAndPlace(Node):
                             mask: np.ndarray = np.array([1., 1., 1.])) -> bool:
         
         # TODO: Visualize the position target markers in RViz 
-
-        # Calculate the end effector location relative to the base from inverse kinematics
-        self._end_effector_current = self._panda.solve_fk(self._joint_states.position)
 
         # Check the position to see if the target has been reached
         position = np.array([
