@@ -2,6 +2,8 @@
 # This software may be modified and distributed under the terms of the
 # GNU Lesser General Public License v2.1 or any later version.
 
+# TODO: Turn this into a comprehensive pick-and-place demo
+
 import numpy as np
 from numpy import random
 from scipy.spatial.transform import Rotation as R
@@ -32,6 +34,12 @@ def quat_mult(q0, q1):
                      x1 * w0 + y1 * z0 - z1 * y0 + w1 * x0,
                      -x1 * z0 + y1 * w0 + z1 * x0 + w1 * y0,
                      x1 * y0 - y1 * x0 + z1 * w0 + w1 * z0], dtype=np.float64)
+
+class RVizHelper():
+    def __init__(self,
+                 node_handle):
+
+        self._node_handle = node_handle
 
 class PandaPickAndPlace(Node):
     def __init__(self):

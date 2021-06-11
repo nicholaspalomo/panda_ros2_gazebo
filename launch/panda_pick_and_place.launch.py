@@ -6,8 +6,6 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 import launch_ros
 import os
 
-# TODO: Launch this demo automatically from the panda_ros2_gazebo.launch.py based on input command line argument from the user
-
 def generate_launch_description():
     pkg_share = launch_ros.substitutions.FindPackageShare(package='panda_ros2_gazebo').find('panda_ros2_gazebo')
     parameter_file_path = os.path.join(pkg_share,
