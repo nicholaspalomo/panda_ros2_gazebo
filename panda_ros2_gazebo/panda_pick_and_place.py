@@ -207,6 +207,10 @@ class PandaPickAndPlace(Node):
 
         end_effector_reached = end_effector_reached and (np.pi - np.linalg.norm(rot_vec) < max_error_rot) and (np.linalg.norm(velocity[3:]) < max_error_vel)
 
+        # self.get_logger().info('ERROR NORM:\n{}'.format(np.linalg.norm(masked_current - masked_target)))
+        # self.get_logger().info('END EFFECTOR POSE:\n{}'.format(self._end_effector_current.pose.pose.position))
+        # self.get_logger().info('END EFFECTOR TARGET:\n{}'.format(self._end_effector_target.pose.pose.position))
+
         return True # end_effector_reached
 
     def sample_end_effector_target(self) -> Odometry:
@@ -214,8 +218,8 @@ class PandaPickAndPlace(Node):
         # Sample a new target position...
         self._end_effector_target.header.stamp = self.get_clock().now().to_msg()
         self._end_effector_target.pose.pose.position.x = 0.4
-        self._end_effector_target.pose.pose.position.y = 0.2 * np.cos(0.25 * self.get_clock().now().seconds_nanoseconds()[0])
-        self._end_effector_target.pose.pose.position.z = 0.2 * np.sin(0.25 * self.get_clock().now().seconds_nanoseconds()[0]) + 0.6
+        self._end_effector_target.pose.pose.position.y = 0.2 * np.cos(0.5 * self.get_clock().now().seconds_nanoseconds()[0])
+        self._end_effector_target.pose.pose.position.z = 0.2 * np.sin(0.5 * self.get_clock().now().seconds_nanoseconds()[0]) + 0.6
 
         # ...and a new target orientation
         r = 0. # np.random.uniform(low=-np.pi/4, high=np.pi/4)
