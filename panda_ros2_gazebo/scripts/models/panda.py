@@ -134,9 +134,6 @@ class Panda():
         dofs = self._fk.kindyn.model().getNrOfDOFs()
         self._fk.set_robot_state(np.array(joint_positions[:dofs]), np.array(joint_velocities[:dofs]), world_gravity=np.array([0., 0., -9.816]))
 
-        # Update the IK model
-        self.update_robot_configuration(self._ik, joint_positions)
-
         # get the end effector pose from the kinematic model
         end_effector_pose_in_base_frame = self._fk.get_relative_transform(self.base_frame, self.end_effector_frame)
 
@@ -151,17 +148,10 @@ class Panda():
         J = self._fk.get_frame_jacobian(self.end_effector_frame)
 
         # compose the joint velocity vector for determining the end effector pose using the end effector Jacobian
-        num_joints = self._articulated_system.getNrOfJoints() + 1 # '+1' here because this includes the fixed joint between the robot and the 'world', I guess...
-        velocities = np.zeros((num_joints,))
-        j = 0
-        for i in range(num_joints):
-            if i in self._arm_joint_names.keys():
-                velocities[i] = joint_velocities[j]
-                j += 1
-
-            if i in self._finger_joint_names.keys():
-                velocities[i] = joint_velocities[j]
-                j += 1
+        dofs = 6+len(self._arm_joint_names.keys())
+        velocities = np.zeros((dofs,))
+        for i, joint_idx in enumerate(self._arm_joint_names.keys()):
+            velocities[i+6] = joint_velocities[joint_idx]
 
         end_effector_twist = np.matmul(J, velocities[:, np.newaxis]).squeeze() # Double-check - is this in the right coordinate system?
 
