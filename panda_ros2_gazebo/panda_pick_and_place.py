@@ -64,6 +64,7 @@ class PandaPickAndPlace(Node):
         self._end_effector_target_publisher = self.create_publisher(Odometry, self.get_parameter('end_effector_target_topic').value, 10)
         self._end_effector_pose_publisher = self.create_publisher(Odometry, self.get_parameter('end_effector_pose_topic').value, 10)
         self._joint_states_subscriber = self.create_subscription(JointState, '/joint_states', self.callback_joint_states, 10)
+        self._p3d_ground_truth_subscriber = self.create_subscription(Odometry, self.get_parameter('end_effector_pose_topic').value, self.callback_p3d_ground_truth, 10)
         self._control_dt = self.get_parameter('control_dt').value
 
         self._panda = Panda(self)
@@ -115,12 +116,16 @@ class PandaPickAndPlace(Node):
             self._i_gains[i] = self._response.values[1]
             self._d_gains[i] = self._response.values[2]
 
+    def callback_p3d_ground_truth(self, end_effector_odom):
+
+        self._end_effector_current = copy.deepcopy(end_effector_odom)
+
     def callback_joint_states(self, joint_states):
 
         self._joint_states = joint_states
 
         # Calculate the end effector location relative to the base from inverse kinematics
-        self._end_effector_current = self._panda.solve_fk(self._joint_states.position, self._joint_states.velocity)
+        # self._end_effector_current = self._panda.solve_fk(self._joint_states.position, self._joint_states.velocity)
 
         if self.end_effector_reached():
             # sample a new end effector target
@@ -129,7 +134,7 @@ class PandaPickAndPlace(Node):
 
         # Publish the end effector target and odometry messages
         self._end_effector_target_publisher.publish(self._end_effector_target)
-        self._end_effector_pose_publisher.publish(self._end_effector_current)
+        # self._end_effector_pose_publisher.publish(self._end_effector_current)
 
         # Update the RViz helper and publish
         self._rviz_helper.publish(self._end_effector_current)
