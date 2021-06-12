@@ -5,11 +5,13 @@
 import os
 import enum
 import numpy as np
+from ..rbd.idyntree import numpy
 from typing import List
 from scipy.spatial.transform import Rotation as R
 
 # For using iDynTree inverse kinematics library
 import idyntree.bindings as idt
+from idyntree.bindings import KinDynComputations
 from ..rbd import conversions
 from ..rbd.idyntree import inverse_kinematics_nlp
 from ..rbd.idyntree import kindyncomputations
@@ -104,7 +106,9 @@ class Panda():
         self._initial_joint_position_targets = self._node_handle.get_parameter('initial_joint_angles').value
         self._initial_joint_position_targets = self.move_fingers(self._initial_joint_position_targets, FingersAction.OPEN)
 
-        self._fk = kindyncomputations.KinDynComputations(self._urdf, considered_joints=list(self._arm_joint_names.values()), velocity_representation=FrameVelocityRepresentation.INERTIAL_FIXED_REPRESENTATION)
+        self._fk = KinDynComputations()
+        self._fk.setFrameVelocityRepresentation(idt.INERTIAL_FIXED_REPRESENTATION)
+        self._fk.loadRobotModel(self._articulated_system)
 
         # create containers for the joint position, velocity, effort
         self._joint_states = JointState()
@@ -131,37 +135,30 @@ class Panda():
         """ Returns an end effector odometry message """
 
         # Update the robot state
-        dofs = self._fk.kindyn.model().getNrOfDOFs()
-        self._fk.set_robot_state(np.array(joint_positions[:dofs]), np.array(joint_velocities[:dofs]), world_gravity=np.array([0., 0., -9.816]))
+        self._fk.setJointPos(numpy.FromNumPy.to_idyntree_dyn_vector(array=np.array(joint_positions)))
 
         # get the end effector pose from the kinematic model
-        end_effector_pose_in_base_frame = self._fk.get_relative_transform(self.base_frame, self.end_effector_frame)
-
-        # end_effector_pose_in_base_frame[:3, :3] = np.matmul(
-        #     self._rot,
-        #     end_effector_pose_in_base_frame[:3, :3])
-        # end_effector_pose_in_base_frame[:3, -1] = np.matmul(
-        #     self._rot,
-        #     end_effector_pose_in_base_frame[:3, -1, np.newaxis]).squeeze()
-
-        # Get the end effector Jacobian
-        J = self._fk.get_frame_jacobian(self.end_effector_frame)
+        end_effector_pose_in_base_frame = self._fk.getRelativeTransform(self.base_frame, self.end_effector_frame)
+        end_effector_position_in_base_frame = end_effector_pose_in_base_frame.getPosition().toNumPy()
+        end_effector_orientation_in_base_frame = end_effector_pose_in_base_frame.getRotation().toNumPy()
 
         # compose the joint velocity vector for determining the end effector pose using the end effector Jacobian
-        dofs = 6+len(self._arm_joint_names.keys())
+        dofs = 6 + self._fk.model().getNrOfDOFs()
+        J = idt.MatrixDynSize(6, dofs)
+        self._fk.getFrameFreeFloatingJacobian(self.end_effector_frame, J)
         velocities = np.zeros((dofs,))
         for i, joint_idx in enumerate(self._arm_joint_names.keys()):
             velocities[i+6] = joint_velocities[joint_idx]
 
-        end_effector_twist = np.matmul(J, velocities[:, np.newaxis]).squeeze() # Double-check - is this in the right coordinate system?
+        end_effector_twist = np.matmul(J.toNumPy(), velocities[:, np.newaxis]).squeeze() # Double-check - is this in the right coordinate system?
 
         end_effector_pose_msg = PoseWithCovariance()
         pose = Pose()
-        pose.position.x = end_effector_pose_in_base_frame[0, -1]
-        pose.position.y = end_effector_pose_in_base_frame[1, -1]
-        pose.position.z = end_effector_pose_in_base_frame[2, -1]
+        pose.position.x = end_effector_position_in_base_frame[0]
+        pose.position.y = end_effector_position_in_base_frame[1]
+        pose.position.z = end_effector_position_in_base_frame[2]
 
-        quat = R.from_matrix(end_effector_pose_in_base_frame[:3, :3]).as_quat()
+        quat = R.from_matrix(end_effector_orientation_in_base_frame).as_quat()
 
         pose.orientation.x = quat[0]
         pose.orientation.y = quat[1]
