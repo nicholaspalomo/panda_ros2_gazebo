@@ -212,7 +212,7 @@ Visualization Manager:
           Scale: 1
           Value: true
         Value: true
-      Enabled: false
+      Enabled: true
       Keep: 5
       Name: Odometry
       Position Tolerance: 0.10000000149011612
@@ -232,7 +232,7 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /end_effector_pose
-      Value: false
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -291,10 +291,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.4503988027572632
+      Pitch: 0.18039830029010773
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 6.259532928466797
+      Yaw: 6.074523448944092
     Saved: ~
 Window Geometry:
   Displays:

@@ -125,6 +125,8 @@ class Panda():
         self._srv_gazebo_unpause = self._node_handle.create_client(Empty, '/gazebo/unpause_physics')
         self._srv_set_model_state = self._node_handle.create_client(SetEntityState, '/gazebo/set_entity_state')
 
+        self._rot = np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]])
+
     def solve_fk(self, joint_positions: List[float], joint_velocities: List[float]) -> Odometry:
         """ Returns an end effector odometry message """
 
@@ -137,6 +139,13 @@ class Panda():
 
         # get the end effector pose from the kinematic model
         end_effector_pose_in_base_frame = self._fk.get_relative_transform(self.base_frame, self.end_effector_frame)
+
+        # end_effector_pose_in_base_frame[:3, :3] = np.matmul(
+        #     self._rot,
+        #     end_effector_pose_in_base_frame[:3, :3])
+        # end_effector_pose_in_base_frame[:3, -1] = np.matmul(
+        #     self._rot,
+        #     end_effector_pose_in_base_frame[:3, -1, np.newaxis]).squeeze()
 
         # Get the end effector Jacobian
         J = self._fk.get_frame_jacobian(self.end_effector_frame)
@@ -154,7 +163,7 @@ class Panda():
                 velocities[i] = joint_velocities[j]
                 j += 1
 
-        end_effector_twist = np.matmul(J, velocities[:, np.newaxis]).squeeze()
+        end_effector_twist = np.matmul(J, velocities[:, np.newaxis]).squeeze() # Double-check - is this in the right coordinate system?
 
         end_effector_pose_msg = PoseWithCovariance()
         pose = Pose()
@@ -232,16 +241,14 @@ class Panda():
 
     def solve_ik(self, target_pose: Odometry) -> np.ndarray:
 
-        rot = np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]])
-
         target_position = np.array([target_pose.pose.pose.position.x, target_pose.pose.pose.position.y, target_pose.pose.pose.position.z])
         target_position = np.matmul(
-            rot, 
+            self._rot, 
             target_position[:, np.newaxis]).squeeze()
 
         target_orientation = R.from_quat([target_pose.pose.pose.orientation.x, target_pose.pose.pose.orientation.y, target_pose.pose.pose.orientation.z, target_pose.pose.pose.orientation.w]).as_matrix()
         target_orientation = np.matmul(
-            rot, 
+            self._rot, 
             target_orientation)
         quat_xyzw = R.from_matrix(target_orientation).as_quat()
 

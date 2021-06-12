@@ -26,23 +26,20 @@ class RVizHelper():
 
         self._counter = min(self._counter, self._max_msgs)
         if self._counter >= self._max_msgs:
-            self._end_effector_target_pose_msg.pop(0)
+            self._end_effector_target_pose_msg.pop(len(self._end_effector_target_pose_msg)-1)
 
-        self._end_effector_target_pose_msg.append(PoseStamped())
-        self._end_effector_target_pose_msg[-1].header = copy.deepcopy(nav_msg.header)
-        self._end_effector_target_pose_msg[-1].pose = copy.deepcopy(nav_msg.pose.pose)
+        self._end_effector_target_pose_msg.insert(0, PoseStamped())
+        self._end_effector_target_pose_msg[0].header = copy.deepcopy(nav_msg.header)
+        self._end_effector_target_pose_msg[0].pose = copy.deepcopy(nav_msg.pose.pose)
 
         self._counter += 1
 
-        self._end_effector_trajectory_msg.header = nav_msg.header
-        self._end_effector_trajectory_msg.poses = self._end_effector_target_pose_msg
+        self._end_effector_trajectory_msg.header = copy.deepcopy(nav_msg.header)
+        self._end_effector_trajectory_msg.poses = copy.deepcopy(self._end_effector_target_pose_msg)
 
     def publish(self, nav_msg: Odometry):
 
         self.set_pose_msg(nav_msg)
 
-        msg_pose = copy.deepcopy(self._end_effector_target_pose_msg[-1])
-        msg_path = copy.deepcopy(self._end_effector_trajectory_msg)
-
-        self._end_effector_target_pose_vis_pub.publish(msg_pose)
-        self._end_effector_trajectory_vis_pub.publish(msg_path)
+        self._end_effector_target_pose_vis_pub.publish(self._end_effector_target_pose_msg[-1])
+        self._end_effector_trajectory_vis_pub.publish(self._end_effector_trajectory_msg)

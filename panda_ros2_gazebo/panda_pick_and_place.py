@@ -80,9 +80,9 @@ class PandaPickAndPlace(Node):
         self._joint_commands_publisher.publish(msg)
 
         # Set an end effector target
-        self._end_effector_target = self._panda.solve_fk(self._joint_states.position, self._joint_states.velocity)
-        self._joint_targets = self._panda.solve_ik(self._end_effector_target)
-        self._end_effector_current = Odometry()
+        self._end_effector_current = self._panda.solve_fk(self._joint_states.position, self._joint_states.velocity)
+        self._joint_targets = self._panda.solve_ik(self._end_effector_current)
+        self._end_effector_target = copy.deepcopy(self._end_effector_current)
 
         # Create the RViz helper for visualizing the waypoints and trajectories
         self._rviz_helper = RVizHelper(self)
@@ -94,7 +94,7 @@ class PandaPickAndPlace(Node):
 
         joint_controller_name = self.get_parameter('joint_controller_name')
 
-        # create a service client to retrieve the PID gains from the joint_group_effort_controller (until ROS2 has a joint_group_position_controller).
+        # create a service client to retrieve the PID gains from the joint_group_effort_controller
         self._parameter_getter_client = self.create_client(GetParameters, '/' + joint_controller_name + '/get_parameters')
         while not self._parameter_getter_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service not available, waiting again...')
@@ -207,20 +207,20 @@ class PandaPickAndPlace(Node):
 
         end_effector_reached = end_effector_reached and (np.pi - np.linalg.norm(rot_vec) < max_error_rot) and (np.linalg.norm(velocity[3:]) < max_error_vel)
 
-        return end_effector_reached
+        return True # end_effector_reached
 
     def sample_end_effector_target(self) -> Odometry:
 
         # Sample a new target position...
         self._end_effector_target.header.stamp = self.get_clock().now().to_msg()
-        self._end_effector_target.pose.pose.position.x = np.random.uniform(low=-0.6, high=0.6)
-        self._end_effector_target.pose.pose.position.y = np.random.uniform(low=-0.6, high=0.6)
-        self._end_effector_target.pose.pose.position.z = np.random.uniform(low=0.1, high=0.6)
+        self._end_effector_target.pose.pose.position.x = 0.4
+        self._end_effector_target.pose.pose.position.y = 0.2 * np.cos(0.25 * self.get_clock().now().seconds_nanoseconds()[0])
+        self._end_effector_target.pose.pose.position.z = 0.2 * np.sin(0.25 * self.get_clock().now().seconds_nanoseconds()[0]) + 0.6
 
         # ...and a new target orientation
-        r = np.random.uniform(low=-np.pi/4, high=np.pi/4)
-        p = np.random.uniform(low=-np.pi/4, high=np.pi/4)
-        y = np.random.uniform(low=-np.pi/4, high=np.pi/4)
+        r = 0. # np.random.uniform(low=-np.pi/4, high=np.pi/4)
+        p = 0. # np.random.uniform(low=-np.pi/4, high=np.pi/4)
+        y = 0. # np.random.uniform(low=-np.pi/4, high=np.pi/4)
 
         quat_xyzw = R.from_euler('xyz', [r, p, y], degrees=False).as_quat()
         self._end_effector_target.pose.pose.orientation.x = quat_xyzw[0]
