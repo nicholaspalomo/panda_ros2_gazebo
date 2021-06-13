@@ -36,7 +36,7 @@ def quat_mult(q0, q1):
                      -x1 * z0 + y1 * w0 + z1 * x0 + w1 * y0,
                      x1 * y0 - y1 * x0 + z1 * w0 + w1 * z0], dtype=np.float64)
 
-class PandaPickAndPlace(Node):
+class PandaFollowCircle(Node):
     def __init__(self):
         super().__init__('pick_and_place')
 
@@ -250,7 +250,7 @@ class PandaPickAndPlace(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    pick_and_place = PandaPickAndPlace()
+    pick_and_place = PandaFollowCircle()
 
     rclpy.spin(pick_and_place)
 
