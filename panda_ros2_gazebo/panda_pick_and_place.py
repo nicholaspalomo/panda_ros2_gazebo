@@ -81,7 +81,7 @@ class PandaPickAndPlace(Node):
 
         # Set an end effector target
         self._panda.set_joint_states(self._joint_states)
-        self._end_effector_current = copy.deepcopy(self._panda._end_effector_odom) # self._panda.solve_fk(self._joint_states.position, self._joint_states.velocity)
+        self._end_effector_current = copy.deepcopy(self._panda.end_effector_odom)
         self._joint_targets = self._panda.solve_ik(self._end_effector_current)
         self._end_effector_target = copy.deepcopy(self._end_effector_current)
 
@@ -121,11 +121,11 @@ class PandaPickAndPlace(Node):
         self._joint_states = joint_states
 
         # Calculate the end effector location relative to the base from inverse kinematics
-        self._end_effector_current = copy.deepcopy(self._panda._end_effector_odom) # self._panda.solve_fk(self._joint_states.position, self._joint_states.velocity)
+        self._end_effector_current = copy.deepcopy(self._panda.end_effector_odom)
 
         if self.end_effector_reached():
             # sample a new end effector target
-            self.get_logger().info('END EFFECTOR TARGET REACHED!')
+            # self.get_logger().info('END EFFECTOR TARGET REACHED!')
             self.sample_end_effector_target()
 
         # Publish the end effector target and odometry messages
@@ -163,8 +163,6 @@ class PandaPickAndPlace(Node):
                             max_error_rot: float = 0.05,
                             max_error_vel: float = 0.1,
                             mask: np.ndarray = np.array([1., 1., 1.])) -> bool:
-        
-        # TODO: Visualize the position target markers in RViz 
 
         # Check the position to see if the target has been reached
         position = np.array([

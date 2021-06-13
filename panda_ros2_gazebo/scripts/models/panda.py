@@ -151,23 +151,12 @@ class Panda():
         # Update the robot state
         self._fk.setJointPos(numpy.FromNumPy.to_idyntree_dyn_vector(array=np.array(joint_positions)))
         
-        # get the end effector pose from the kinematic model
-        end_effector_pose_in_base_frame = self._fk.getRelativeTransform(self.base_frame, self.end_effector_frame)
-        end_effector_position_in_base_frame = end_effector_pose_in_base_frame.getPosition().toNumPy()
-        end_effector_orientation_in_base_frame = end_effector_pose_in_base_frame.getRotation().toNumPy()
-        
         self._end_effector_odom.header.stamp = self._node_handle.get_clock().now().to_msg()
 
         when = rclpy.time.Time()
         try:
             # Suspends callback until transform becomes available
             end_effector_pose_in_base_frame: TransformStamped = await self._base_2_end_effector_tf_buffer.lookup_transform_async(self.base_frame, self.end_effector_frame, when)
-
-            end_effector_position_in_base_frame[0] = end_effector_pose_in_base_frame.transform.translation.x
-            end_effector_position_in_base_frame[1] = end_effector_pose_in_base_frame.transform.translation.y
-            end_effector_position_in_base_frame[2] = end_effector_pose_in_base_frame.transform.translation.z
-
-            self._node_handle.get_logger().info('TRANSFORM:\n{}'.format(end_effector_pose_in_base_frame))
 
             # compose the joint velocity vector for determining the end effector pose using the end effector Jacobian
             dofs = 6 + self._fk.model().getNrOfDOFs()
@@ -181,21 +170,14 @@ class Panda():
 
             end_effector_pose_msg = PoseWithCovariance()
             pose = Pose()
-            pose.position.x = end_effector_position_in_base_frame[0]
-            pose.position.y = end_effector_position_in_base_frame[1]
-            pose.position.z = end_effector_position_in_base_frame[2]
+            pose.position.x = end_effector_pose_in_base_frame.transform.translation.x
+            pose.position.y = end_effector_pose_in_base_frame.transform.translation.y
+            pose.position.z = end_effector_pose_in_base_frame.transform.translation.z
 
-            quat = R.from_matrix(end_effector_orientation_in_base_frame).as_quat()
-
-            quat[0] = end_effector_pose_in_base_frame.transform.rotation.x
-            quat[1] = end_effector_pose_in_base_frame.transform.rotation.y
-            quat[2] = end_effector_pose_in_base_frame.transform.rotation.z
-            quat[3] = end_effector_pose_in_base_frame.transform.rotation.w
-
-            pose.orientation.x = quat[0]
-            pose.orientation.y = quat[1]
-            pose.orientation.z = quat[2]
-            pose.orientation.w = quat[3]
+            pose.orientation.x = end_effector_pose_in_base_frame.transform.rotation.x
+            pose.orientation.y = end_effector_pose_in_base_frame.transform.rotation.y
+            pose.orientation.z = end_effector_pose_in_base_frame.transform.rotation.z
+            pose.orientation.w = end_effector_pose_in_base_frame.transform.rotation.w
 
             end_effector_pose_msg.pose = pose
 
@@ -367,6 +349,11 @@ class Panda():
     def end_effector_frame(self) -> str:
 
         return self._node_handle.get_parameter('end_effector_frame').value
+
+    @property
+    def end_effector_odom(self) -> Odometry:
+        
+        return self._end_effector_odom
 
     @property
     def model_file(self) -> str:
