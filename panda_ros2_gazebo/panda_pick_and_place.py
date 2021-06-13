@@ -119,6 +119,7 @@ class PandaPickAndPlace(Node):
     def callback_joint_states(self, joint_states):
 
         self._joint_states = joint_states
+        self._panda.set_joint_states(self._joint_states)
 
         # Calculate the end effector location relative to the base from inverse kinematics
         self._end_effector_current = copy.deepcopy(self._panda.end_effector_odom)

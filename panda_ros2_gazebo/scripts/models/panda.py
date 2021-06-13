@@ -145,18 +145,19 @@ class Panda():
 
     async def solve_fk(self):
         """ Returns an end effector odometry message """
-        joint_positions = self._joint_states.position
-        joint_velocities = self._joint_states.velocity
-
-        # Update the robot state
-        self._fk.setJointPos(numpy.FromNumPy.to_idyntree_dyn_vector(array=np.array(joint_positions)))
-        
-        self._end_effector_odom.header.stamp = self._node_handle.get_clock().now().to_msg()
 
         when = rclpy.time.Time()
         try:
             # Suspends callback until transform becomes available
             end_effector_pose_in_base_frame: TransformStamped = await self._base_2_end_effector_tf_buffer.lookup_transform_async(self.base_frame, self.end_effector_frame, when)
+
+            joint_positions = self._joint_states.position
+            joint_velocities = self._joint_states.velocity
+
+            # Update the robot state
+            self._fk.setJointPos(numpy.FromNumPy.to_idyntree_dyn_vector(array=np.array(joint_positions)))
+            
+            self._end_effector_odom.header.stamp = self._node_handle.get_clock().now().to_msg()
 
             # compose the joint velocity vector for determining the end effector pose using the end effector Jacobian
             dofs = 6 + self._fk.model().getNrOfDOFs()
