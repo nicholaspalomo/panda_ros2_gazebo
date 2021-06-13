@@ -7,6 +7,7 @@
 import enum
 import copy
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 
 # ROS2 Python API libraries
 import rclpy
