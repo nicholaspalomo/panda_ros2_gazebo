@@ -119,7 +119,7 @@ class PandaPickAndPlace(Node):
 
         self._joint_states = joint_states
 
-        # Calculate the end effector location relative to the base from inverse kinematics
+        # Calculate the end effector location relative to the base from forward kinematics
         self._end_effector_current = self._panda.solve_fk(self._joint_states.position, self._joint_states.velocity)
 
         if self.end_effector_reached():
