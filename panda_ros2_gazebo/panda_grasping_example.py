@@ -17,7 +17,6 @@ from rclpy.node import Node
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64MultiArray
-from gazebo_msgs.srv import SpawnEntity
 
 # Panda kinematic model
 from .scripts.models.panda import Panda, FingersAction
@@ -27,6 +26,20 @@ from .rviz_helper import RVizHelper
 
 # Misc
 from .panda_pick_and_place import quat_mult
+
+# For spawning entities into Gazebo
+import xml
+from geometry_msgs.msg import Pose
+from gazebo_msgs.srv import SpawnEntity
+
+MODEL_DATABASE_TEMPLATE = """\
+<sdf version="1.4">
+    <world name="default">
+        <include>
+            <uri>model://{}</uri>
+        </include>
+    </world>
+</sdf>"""
 
 class StateMachineAction(enum.Enum):
 
@@ -60,7 +73,34 @@ class PandaPickAndPlace(Node):
         )
 
         # Declare service for spawning objects
-        self._spawn_model = self.create_client(SpawnEntity, '/gazebo/spawn_model')
+        self._spawn_model = self.create_client(SpawnEntity, '/spawn_entity')
+
+        self.get_logger().info("Connecting to `/spawn_entity` service...")
+        if not self._spawn_model.service_is_ready():
+            self._spawn_model.wait_for_service()
+            self.get_logger().info("...connected!")
+
+        self._spawn_model_request = SpawnEntity.Request()
+
+        # Initialize and spawn the box into the simulation, can repeatedly change the location of it using "set model state"
+        self._spawn_model_request.name = "cube"
+        self._spawn_model_request.xml = MODEL_DATABASE_TEMPLATE.format('wood_cube_5cm')
+        self._spawn_model_request.reference_frame = "world"
+        self._spawn_model_request.initial_pose = Pose()
+        self._spawn_model_request.initial_pose.position.x = 0.4 # [m]
+        self._spawn_model_request.initial_pose.position.y = 0.0 # [m]
+        self._spawn_model_request.initial_pose.position.z = 5/2 * 0.01 # [m]
+
+        response = self._spawn_model.call_async(self._spawn_model_request)
+
+        rclpy.spin_until_future_complete(self, response)
+        if response.result() is not None:
+            print('response: %r' % response.result())
+        else:
+            raise RuntimeError(
+                'exception while calling service: %r' % response.exception())
+
+        # TODO: Visualize the cube in RViz using the mesh resource approach. See the answer given here for how to do that: https://answers.ros.org/question/217324/visualizing-gazebo-model-in-rviz/
 
         # Create joint commands, end effector publishers; subscribe to joint state
         self._joint_commands_publisher = self.create_publisher(Float64MultiArray, self.get_parameter('joint_control_topic').value, 10)
@@ -90,6 +130,9 @@ class PandaPickAndPlace(Node):
 
         # Create the RViz helper for visualizing the waypoints and trajectories
         self._rviz_helper = RVizHelper(self)
+
+        # Save the current state of the state machine
+        self._state : StateMachineAction = StateMachineAction.HOME
 
     def callback_joint_states(self, joint_states):
 
@@ -176,5 +219,38 @@ class PandaPickAndPlace(Node):
         # TODO: Download the wood_cube_5cm model; Specify the state machine
 
     def get_next_target(self):
+        
+        # TODO: Need to update the end_effector_reached function to double check that the gripper state has been reached as well
+        # TODO: In each state, need to define the end effector position and the length of time (or the number of time steps the robot should remain in that state once it has been reached)
+        # TODO: Maybe in addition to an end_effector_reached function, you should also right a function to check if the task has been completed
+        
+        # If the current state is "HOME" position and the target location has been reached
+        if self._state == StateMachineAction.HOME and self.end_effector_reached():
+            
+            
 
-        print("Do stuff. Get the next target task for the Panda.")
+            # Go to the location where the box is and hover above it
+            self._state = StateMachineAction.HOVER
+
+            return
+
+        if self._state == StateMachineAction.HOVER and self.end_effector_reached():
+
+            # Pick up the box
+            self._state = StateMachineAction.GRAB
+
+            return
+
+        if self._state == StateMachineAction.GRAB and self.end_effector_reached():
+
+            # Deliver the box to its location. Maybe hover above the location before dropping the box
+            self._state = StateMachineAction.DELIVER
+
+            return
+
+        if self._state == StateMachineAction.DELIVER and self.end_effector_reached():
+
+            # Go back to the home position and wait until another box has spawned
+            self._state = StateMachineAction.HOME
+
+            return
