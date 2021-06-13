@@ -18,7 +18,13 @@ from ..rbd.idyntree import kindyncomputations
 from ..rbd.idyntree.helpers import FrameVelocityRepresentation
 
 # ROS2 message and service data structures
-from geometry_msgs.msg import Transform, Vector3, Quaternion, PoseWithCovariance, TwistWithCovariance, Pose, Twist
+import rclpy
+from rclpy.node import Node
+import rclpy.time
+from tf2_ros import LookupException
+from tf2_ros.buffer import Buffer
+from tf2_ros.transform_listener import TransformListener
+from geometry_msgs.msg import Transform, Vector3, Quaternion, PoseWithCovariance, TwistWithCovariance, Pose, Twist, TransformStamped
 from sensor_msgs.msg import JointState
 from nav_msgs.msg import Odometry
 from gazebo_msgs.msg import EntityState
@@ -33,12 +39,18 @@ class FingersAction(enum.Enum):
 class Panda():
 
     def __init__(self,
-                 node_handle,
+                 node_handle: Node,
                  position: List[float] = (0.0, 0.0, 0.0),
                  orientation: List[float] = (0, 0, 0, 1.0),
                  model_file: str = None):
 
         self._node_handle = node_handle
+        self._base_2_end_effector_tf_buffer = Buffer(node=self._node_handle)
+        self._base_2_end_effector_tf_listener = TransformListener(self._base_2_end_effector_tf_buffer, self._node_handle)
+
+        # Try to get the transform every second.
+        # If the transform is unavailable the timer callback will wait for it.
+        self._output_timer = self._node_handle.create_timer(0.001, self.solve_fk)
 
         # Initial pose
         initial_pose = Transform()
@@ -131,63 +143,83 @@ class Panda():
 
         self._rot = np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]])
 
-    def solve_fk(self, joint_positions: List[float], joint_velocities: List[float]) -> Odometry:
+    async def solve_fk(self):
         """ Returns an end effector odometry message """
+        joint_positions = self._joint_states.position
+        joint_velocities = self._joint_states.velocity
 
         # Update the robot state
         self._fk.setJointPos(numpy.FromNumPy.to_idyntree_dyn_vector(array=np.array(joint_positions)))
-
+        
         # get the end effector pose from the kinematic model
         end_effector_pose_in_base_frame = self._fk.getRelativeTransform(self.base_frame, self.end_effector_frame)
         end_effector_position_in_base_frame = end_effector_pose_in_base_frame.getPosition().toNumPy()
         end_effector_orientation_in_base_frame = end_effector_pose_in_base_frame.getRotation().toNumPy()
-
-        # compose the joint velocity vector for determining the end effector pose using the end effector Jacobian
-        dofs = 6 + self._fk.model().getNrOfDOFs()
-        J = idt.MatrixDynSize(6, dofs)
-        self._fk.getFrameFreeFloatingJacobian(self.end_effector_frame, J)
-        velocities = np.zeros((dofs,))
-        for i, joint_idx in enumerate(self._arm_joint_names.keys()):
-            velocities[i+6] = joint_velocities[joint_idx]
-
-        end_effector_twist = np.matmul(J.toNumPy(), velocities[:, np.newaxis]).squeeze() # Double-check - is this in the right coordinate system?
-
-        end_effector_pose_msg = PoseWithCovariance()
-        pose = Pose()
-        pose.position.x = end_effector_position_in_base_frame[0]
-        pose.position.y = end_effector_position_in_base_frame[1]
-        pose.position.z = end_effector_position_in_base_frame[2]
-
-        quat = R.from_matrix(end_effector_orientation_in_base_frame).as_quat()
-
-        pose.orientation.x = quat[0]
-        pose.orientation.y = quat[1]
-        pose.orientation.z = quat[2]
-        pose.orientation.w = quat[3]
-
-        end_effector_pose_msg.pose = pose
-
-        self._end_effector_odom.pose = end_effector_pose_msg
-
-        end_effector_twist_msg = TwistWithCovariance()
-        twist = Twist()
-        velocity = Vector3()
-        velocity.x = end_effector_twist[0]
-        velocity.y = end_effector_twist[1]
-        velocity.z = end_effector_twist[2]
-        twist.linear = velocity
-        velocity.x = end_effector_twist[3]
-        velocity.y = end_effector_twist[4]
-        velocity.z = end_effector_twist[5]
-        twist.angular = velocity
-
-        end_effector_twist_msg.twist = twist
-
-        self._end_effector_odom.twist = end_effector_twist_msg
         
         self._end_effector_odom.header.stamp = self._node_handle.get_clock().now().to_msg()
 
-        return self._end_effector_odom
+        when = rclpy.time.Time()
+        try:
+            # Suspends callback until transform becomes available
+            end_effector_pose_in_base_frame: TransformStamped = await self._base_2_end_effector_tf_buffer.lookup_transform_async(self.base_frame, self.end_effector_frame, when)
+
+            end_effector_position_in_base_frame[0] = end_effector_pose_in_base_frame.transform.translation.x
+            end_effector_position_in_base_frame[1] = end_effector_pose_in_base_frame.transform.translation.y
+            end_effector_position_in_base_frame[2] = end_effector_pose_in_base_frame.transform.translation.z
+
+            self._node_handle.get_logger().info('TRANSFORM:\n{}'.format(end_effector_pose_in_base_frame))
+
+            # compose the joint velocity vector for determining the end effector pose using the end effector Jacobian
+            dofs = 6 + self._fk.model().getNrOfDOFs()
+            J = idt.MatrixDynSize(6, dofs)
+            self._fk.getFrameFreeFloatingJacobian(self.end_effector_frame, J)
+            velocities = np.zeros((dofs,))
+            for i, joint_idx in enumerate(self._arm_joint_names.keys()):
+                velocities[i+6] = joint_velocities[joint_idx]
+
+            end_effector_twist = np.matmul(J.toNumPy(), velocities[:, np.newaxis]).squeeze() # Double-check - is this in the right coordinate system?
+
+            end_effector_pose_msg = PoseWithCovariance()
+            pose = Pose()
+            pose.position.x = end_effector_position_in_base_frame[0]
+            pose.position.y = end_effector_position_in_base_frame[1]
+            pose.position.z = end_effector_position_in_base_frame[2]
+
+            quat = R.from_matrix(end_effector_orientation_in_base_frame).as_quat()
+
+            quat[0] = end_effector_pose_in_base_frame.transform.rotation.x
+            quat[1] = end_effector_pose_in_base_frame.transform.rotation.y
+            quat[2] = end_effector_pose_in_base_frame.transform.rotation.z
+            quat[3] = end_effector_pose_in_base_frame.transform.rotation.w
+
+            pose.orientation.x = quat[0]
+            pose.orientation.y = quat[1]
+            pose.orientation.z = quat[2]
+            pose.orientation.w = quat[3]
+
+            end_effector_pose_msg.pose = pose
+
+            self._end_effector_odom.pose = end_effector_pose_msg
+
+            end_effector_twist_msg = TwistWithCovariance()
+            twist = Twist()
+            velocity = Vector3()
+            velocity.x = end_effector_twist[0]
+            velocity.y = end_effector_twist[1]
+            velocity.z = end_effector_twist[2]
+            twist.linear = velocity
+            velocity.x = end_effector_twist[3]
+            velocity.y = end_effector_twist[4]
+            velocity.z = end_effector_twist[5]
+            twist.angular = velocity
+
+            end_effector_twist_msg.twist = twist
+
+            self._end_effector_odom.twist = end_effector_twist_msg
+
+        except LookupException as e:
+
+            self._node_handle.get_logger().info('FAILED TO GET TRANSFORM FROM {} TO {}'.format(self.base_frame, self.end_effector_frame))
 
     def _get_panda_ik(self, optimized_joints: List[str]) -> \
         inverse_kinematics_nlp.InverseKinematicsNLP:
