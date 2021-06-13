@@ -21,7 +21,12 @@ from rcl_interfaces.srv import GetParameters
 
 # Panda kinematic model
 from .scripts.models.panda import Panda, FingersAction
+
+# Helper class for RViz visualization
 from .rviz_helper import RVizHelper
+
+# Panda grasping example
+# from .panda_grasping_example import 
 
 # Configure numpy output
 np.set_printoptions(precision=4, suppress=True)
@@ -121,7 +126,7 @@ class PandaFollowCircle(Node):
         self._joint_states = joint_states
         self._panda.set_joint_states(self._joint_states)
 
-        # Calculate the end effector location relative to the base from inverse kinematics
+        # Calculate the end effector location relative to the base from forward kinematics
         self._end_effector_current = copy.deepcopy(self._panda.end_effector_odom)
 
         if self.end_effector_reached():
