@@ -23,3 +23,7 @@ repositories:
     type: git
     url: https://github.com/ros-controls/ros2_controllers
     version: effort_group_position_controller
+  idyntree:
+    type: git
+    url: https://github.com/robotology/idyntree
+    version: master
