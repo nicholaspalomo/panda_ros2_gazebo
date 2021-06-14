@@ -23,20 +23,16 @@ from rcl_interfaces.srv import GetParameters
 from .scripts.models.panda import Panda, FingersAction
 from .rviz_helper import RVizHelper
 
+# Misc
+from .helpers import quat_mult
+
+# Panda grasping example
+from .panda_grasping_example import PandaPickAndPlace
+
 # Configure numpy output
 np.set_printoptions(precision=4, suppress=True)
 
-def quat_mult(q0, q1):
-    # Function to multiply two quaternions of the form (i, j, k, re)
-
-    x0, y0, z0, w0 = q0
-    x1, y1, z1, w1 = q1
-    return np.array([-x1 * x0 - y1 * y0 - z1 * z0 + w1 * w0,
-                     x1 * w0 + y1 * z0 - z1 * y0 + w1 * x0,
-                     -x1 * z0 + y1 * w0 + z1 * x0 + w1 * y0,
-                     x1 * y0 - y1 * x0 + z1 * w0 + w1 * z0], dtype=np.float64)
-
-class PandaPickAndPlace(Node):
+class PandaFollowCircle(Node):
     def __init__(self):
         super().__init__('pick_and_place')
 
@@ -250,7 +246,8 @@ class PandaPickAndPlace(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    pick_and_place = PandaPickAndPlace()
+    pick_and_place = PandaFollowCircle()
+    # pick_and_place = PandaPickAndPlace()
 
     rclpy.spin(pick_and_place)
 
