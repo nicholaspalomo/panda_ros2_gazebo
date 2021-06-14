@@ -186,9 +186,11 @@ class PandaPickAndPlace(Node):
                             mask: np.ndarray = np.array([1., 1., 1.])) -> bool:
 
         if self._state == StateMachineAction.HOME:
-            end_effector_reached = np.linalg.norm(np.array(self._joint_states.position) - np.array(self._joint_targets)) < max_error_pos
+            end_effector_reached = np.linalg.norm(np.array(self._joint_states.position) - np.array(self._joint_targets)) < max_error_pos * 2.
 
-            end_effector_reached = end_effector_reached and np.linalg.norm(np.array(self._joint_states.velocity)) < max_error_vel
+            end_effector_reached = end_effector_reached and np.linalg.norm(np.array(self._joint_states.velocity)) < max_error_vel * 2.
+
+            self.get_logger().info('JOINT POSITION ERROR NORM:\n{}'.format(np.linalg.norm(np.array(self._joint_states.position) - np.array(self._joint_targets))))
 
         else:
             # Check the position to see if the target has been reached
@@ -274,7 +276,7 @@ class PandaPickAndPlace(Node):
 
                 # Set the end effector target to the cube pose
                 self._end_effector_target.pose.pose = copy.deepcopy(self._cube_pose.pose)
-                self._end_effector_target.pose.pose.position.z += 3. / 100. # hover 3 cm above the cube
+                self._end_effector_target.pose.pose.position.z = 8. / 100. # hover 3 cm above the cube
                 quat_xyzw = R.from_euler(seq="y", angles=90, degrees=True).as_quat()
                 self._end_effector_target.pose.pose.orientation.x = quat_xyzw[0]
                 self._end_effector_target.pose.pose.orientation.y = quat_xyzw[1]
@@ -297,7 +299,7 @@ class PandaPickAndPlace(Node):
                 self._wait = 0
 
                 # Lower the gripper and close it around the cube
-                self._end_effector_target.pose.pose.position.z -= 3. / 100.
+                self._end_effector_target.pose.pose.position.z = 2.5 / 100.
 
                 self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
@@ -318,7 +320,7 @@ class PandaPickAndPlace(Node):
                 self._wait = 0
 
                 # set the height again to 3 cm above the ground
-                self._end_effector_target.pose.pose.position.z += 3. / 100.
+                self._end_effector_target.pose.pose.position.z = 8. / 100.
 
                 self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
