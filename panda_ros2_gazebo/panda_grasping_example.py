@@ -31,8 +31,9 @@ from .helpers import quat_mult
 # For spawning entities into Gazebo
 import xml
 from geometry_msgs.msg import Pose
-from gazebo_msgs.srv import SpawnEntity, GetEntityState, SetEntityState
+from gazebo_msgs.srv import SpawnEntity, GetEntityState, SetEntityState, GetModelState
 from gazebo_msgs.msg import EntityState
+from rclpy.task import Future
 
 MODEL_DATABASE_TEMPLATE = """\
 <sdf version="1.4">
@@ -51,13 +52,17 @@ class StateMachineAction(enum.Enum):
     HOVER = enum.auto() # hover over the box
     HOME = enum.auto() # return to the home/neutal orientation
 
-def check_service_call_completed(node: Node, response):
+def check_service_call_completed(node: Node, response: Future):
     rclpy.spin_until_future_complete(node, response)
     if response.result() is not None:
         print('RESPONSE: %r' % response.result())
+
+        return response.result()
     else:
         raise RuntimeError(
             'EXCEPTION WHILE CALLING SERVICE: %r' % response.exception())
+
+        return None
 
 # TODO: Visualize the robot end configuration before the robot goes there. Maybe spawn a second instance of the panda robot for that and set the transparency to something reasonable (e.g. alpha = 0.1)
 
@@ -105,7 +110,7 @@ class PandaPickAndPlace(Node):
         self._spawn_model_request.initial_pose.position.z = 5/2 * 0.01 # [m]
 
         response = self._spawn_model_client.call_async(self._spawn_model_request)
-        check_service_call_completed(self, response)
+        _ = check_service_call_completed(self, response)
 
         # TODO: Visualize the cube in RViz using the mesh resource approach. See the answer given here for how to do that: https://answers.ros.org/question/217324/visualizing-gazebo-model-in-rviz/
 
@@ -113,16 +118,20 @@ class PandaPickAndPlace(Node):
         self._get_model_state_client = self.create_client(GetEntityState, '/get_entity_state')
         self._entity_state_request: GetEntityState.Request = GetEntityState.Request()
         self._entity_state_request.name = 'cube'
-        self._entity_state_request.reference_frame = self.get_parameter('base_frame').value
 
-        self._cube_pose: EntityState = self._get_model_state_client.call_async(self._entity_state_request)
+        self.get_logger().info('TRYING TO GET THE CUBE POSE')
+
+        response = self._get_model_state_client.call_async(self._entity_state_request)
+        self._cube_pose: GetEntityState.Response = check_service_call_completed(self, response)
+
+        self.get_logger().info('INITIAL CUBE POSE:\n{}'.format(self._cube_pose))
 
         self._set_model_state_client = self.create_client(SetEntityState, '/set_entity_state')
         self._set_model_state_request: SetEntityState.Request = SetEntityState.Request()
 
         # Timestep counter for how much time the robot should wait before transitioning to the next state.
         self._wait = 0
-        self._max_wait = 1000
+        self._max_wait = 100
 
         # Create joint commands, end effector publishers; subscribe to joint state
         self._joint_commands_publisher = self.create_publisher(Float64MultiArray, self.get_parameter('joint_control_topic').value, 10)
@@ -146,9 +155,8 @@ class PandaPickAndPlace(Node):
         self._joint_commands_publisher.publish(msg)
 
         # Set an end effector target
-        self._panda.set_joint_states(self._joint_states)
-        self._end_effector_current: Odometry = copy.deepcopy(self._panda.end_effector_odom)
-        self._joint_targets: List[float] = copy.deepcopy(self._joint_states.position)
+        self._end_effector_current = self._panda.solve_fk(self._joint_states, remap=False)
+        self._joint_targets: List[float] = self._panda.solve_ik(self._end_effector_current)
         self._end_effector_target: Odometry = copy.deepcopy(self._end_effector_current)
 
         # At the start, the fingers should be OPEN
@@ -166,7 +174,7 @@ class PandaPickAndPlace(Node):
         self._panda.set_joint_states(self._joint_states)
 
         # Calculate the end effector location relative to the base from forward kinematics
-        self._end_effector_current = copy.deepcopy(self._panda.end_effector_odom)
+        self._end_effector_current = self._panda.solve_fk(self._joint_states)
 
         self.get_next_target() # cycle target to next action in state machine
 
@@ -185,59 +193,51 @@ class PandaPickAndPlace(Node):
                             max_error_vel: float = 0.1,
                             mask: np.ndarray = np.array([1., 1., 1.])) -> bool:
 
-        if self._state == StateMachineAction.HOME:
-            end_effector_reached = np.linalg.norm(np.array(self._joint_states.position) - np.array(self._joint_targets)) < max_error_pos * 2.
+        # Check the position to see if the target has been reached
+        position = np.array([
+            self._end_effector_current.pose.pose.position.x,
+            self._end_effector_current.pose.pose.position.y,
+            self._end_effector_current.pose.pose.position.z])
+        velocity = np.array([
+            self._end_effector_current.twist.twist.linear.x,
+            self._end_effector_current.twist.twist.linear.y,
+            self._end_effector_current.twist.twist.linear.z,
+            self._end_effector_current.twist.twist.angular.x,
+            self._end_effector_current.twist.twist.angular.y,
+            self._end_effector_current.twist.twist.angular.z])
+        target = np.array([
+            self._end_effector_target.pose.pose.position.x,
+            self._end_effector_target.pose.pose.position.y,
+            self._end_effector_target.pose.pose.position.z])
 
-            end_effector_reached = end_effector_reached and np.linalg.norm(np.array(self._joint_states.velocity)) < max_error_vel * 2.
+        masked_target = mask * target
+        masked_current = mask * position
 
-            self.get_logger().info('JOINT POSITION ERROR NORM:\n{}'.format(np.linalg.norm(np.array(self._joint_states.position) - np.array(self._joint_targets))))
+        end_effector_reached = (np.linalg.norm(masked_current - masked_target) < max_error_pos) and \
+            (np.linalg.norm(velocity[:3]) < max_error_vel)
 
-        else:
-            # Check the position to see if the target has been reached
-            position = np.array([
-                self._end_effector_current.pose.pose.position.x,
-                self._end_effector_current.pose.pose.position.y,
-                self._end_effector_current.pose.pose.position.z])
-            velocity = np.array([
-                self._end_effector_current.twist.twist.linear.x,
-                self._end_effector_current.twist.twist.linear.y,
-                self._end_effector_current.twist.twist.linear.z,
-                self._end_effector_current.twist.twist.angular.x,
-                self._end_effector_current.twist.twist.angular.y,
-                self._end_effector_current.twist.twist.angular.z])
-            target = np.array([
-                self._end_effector_target.pose.pose.position.x,
-                self._end_effector_target.pose.pose.position.y,
-                self._end_effector_target.pose.pose.position.z])
+        # Check the orientation to see if the target has been reached
+        # orientation = np.array([
+        #     self._end_effector_current.pose.pose.orientation.x,
+        #     self._end_effector_current.pose.pose.orientation.y,
+        #     self._end_effector_current.pose.pose.orientation.z,
+        #     self._end_effector_current.pose.pose.orientation.w])
+        # target_inv = np.array([
+        #     -self._end_effector_target.pose.pose.orientation.x,
+        #     -self._end_effector_target.pose.pose.orientation.y,
+        #     -self._end_effector_target.pose.pose.orientation.z,
+        #     self._end_effector_target.pose.pose.orientation.w])
+        # target_inv /= np.linalg.norm(target_inv)
 
-            masked_target = mask * target
-            masked_current = mask * position
+        # find the rotation difference between the two quaternions - TODO: I think these calculations are incorrect
+        # orientation_diff = quat_mult(orientation, target_inv)
+        # rot_vec = R.from_quat(orientation_diff).as_rotvec()
 
-            end_effector_reached = (np.linalg.norm(masked_current - masked_target) < max_error_pos) and \
-                (np.linalg.norm(velocity[:3]) < max_error_vel)
+        # end_effector_reached = end_effector_reached and (np.pi - np.linalg.norm(rot_vec) < max_error_rot) and (np.linalg.norm(velocity[3:]) < max_error_vel)
 
-            # Check the orientation to see if the target has been reached
-            orientation = np.array([
-                self._end_effector_current.pose.pose.orientation.x,
-                self._end_effector_current.pose.pose.orientation.y,
-                self._end_effector_current.pose.pose.orientation.z,
-                self._end_effector_current.pose.pose.orientation.w])
-            target_inv = np.array([
-                -self._end_effector_target.pose.pose.orientation.x,
-                -self._end_effector_target.pose.pose.orientation.y,
-                -self._end_effector_target.pose.pose.orientation.z,
-                self._end_effector_target.pose.pose.orientation.w])
-            target_inv /= np.linalg.norm(target_inv)
-
-            # find the rotation difference between the two quaternions
-            orientation_diff = quat_mult(orientation, target_inv)
-            rot_vec = R.from_quat(orientation_diff).as_rotvec()
-
-            end_effector_reached = end_effector_reached and (np.pi - np.linalg.norm(rot_vec) < max_error_rot) and (np.linalg.norm(velocity[3:]) < max_error_vel)
-
-            # self.get_logger().info('ERROR NORM:\n{}'.format(np.linalg.norm(masked_current - masked_target)))
-            # self.get_logger().info('END EFFECTOR POSE:\n{}'.format(self._end_effector_current.pose.pose.position))
-            # self.get_logger().info('END EFFECTOR TARGET:\n{}'.format(self._end_effector_target.pose.pose.position))
+        # self.get_logger().info('ERROR NORM:\n{}'.format(np.linalg.norm(masked_current - masked_target)))
+        # self.get_logger().info('END EFFECTOR POSE:\n{}'.format(self._end_effector_current.pose.pose.position))
+        # self.get_logger().info('END EFFECTOR TARGET:\n{}'.format(self._end_effector_target.pose.pose.position))
 
         return end_effector_reached
 
@@ -251,9 +251,9 @@ class PandaPickAndPlace(Node):
 
         # TODO: Sample new pose for the cube
         random_position = np.random.uniform(low=[0.2, -0.3, 0.025], high=[0.4, 0.3, 0.025])
-        self._cube_pose.pose.position.x = random_position[0]
-        self._cube_pose.pose.position.y = random_position[1]
-        self._cube_pose.pose.position.z = random_position[2]
+        self._cube_pose.state.pose.position.x = random_position[0]
+        self._cube_pose.state.pose.position.y = random_position[1]
+        self._cube_pose.state.pose.position.z = random_position[2]
 
         self._set_model_state_request.state = self._cube_pose
         response = self._set_model_state_client.call_async(self._set_model_state_request)
@@ -271,11 +271,12 @@ class PandaPickAndPlace(Node):
             if self._wait < self._max_wait:
                 # Keep waiting
                 self._wait += 1
+
             else:
                 self._wait = 0
 
                 # Set the end effector target to the cube pose
-                self._end_effector_target.pose.pose = copy.deepcopy(self._cube_pose.pose)
+                self._end_effector_target.pose.pose = copy.deepcopy(self._cube_pose.state.pose)
                 self._end_effector_target.pose.pose.position.z = 8. / 100. # hover 3 cm above the cube
                 quat_xyzw = R.from_euler(seq="y", angles=90, degrees=True).as_quat()
                 self._end_effector_target.pose.pose.orientation.x = quat_xyzw[0]
@@ -348,5 +349,15 @@ class PandaPickAndPlace(Node):
 
                     # Return to the home position and spawn the box in a new location
                     self._joint_targets = self._panda.reset_model()
+
+                    joint_target = JointState()
+                    joint_target.position = self._joint_targets.copy()
+                    joint_target.velocity = [0.] * self._num_joints
+                    joint_target.effort = [0.] * self._num_joints
+
+                    self._end_effector_target = self._panda.solve_fk(joint_target, remap=False)
+
+                    # reset the internal joint states
+                    _ = self._panda.solve_fk(self._joint_states)
 
                     self._state = StateMachineAction.HOME

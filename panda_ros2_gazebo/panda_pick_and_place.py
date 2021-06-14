@@ -246,8 +246,8 @@ class PandaFollowCircle(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    pick_and_place = PandaFollowCircle()
-    # pick_and_place = PandaPickAndPlace()
+    # pick_and_place = PandaFollowCircle()
+    pick_and_place = PandaPickAndPlace()
 
     rclpy.spin(pick_and_place)
 
