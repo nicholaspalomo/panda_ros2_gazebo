@@ -7,6 +7,7 @@
 import enum
 import copy
 import numpy as np
+from typing import List
 from scipy.spatial.transform import Rotation as R
 
 # ROS2 Python API libraries
@@ -25,7 +26,7 @@ from .scripts.models.panda import Panda, FingersAction
 from .rviz_helper import RVizHelper
 
 # Misc
-from .panda_pick_and_place import quat_mult
+from .helpers import quat_mult
 
 # For spawning entities into Gazebo
 import xml
@@ -87,8 +88,8 @@ class PandaPickAndPlace(Node):
         self._spawn_model_client = self.create_client(SpawnEntity, '/spawn_entity')
 
         self.get_logger().info("CONNECTING TO `/spawn_entity` SERVICE...")
-        if not self._spawn_model.service_is_ready():
-            self._spawn_model.wait_for_service()
+        if not self._spawn_model_client.service_is_ready():
+            self._spawn_model_client.wait_for_service()
             self.get_logger().info("...CONNECTED!")
         self.get_logger().info("[WARNING] ANY MODEL YOU WANT TO SPAWN USING THE GAZEBO `/spawn_entity` SERVICE MUST EXIST IN THE GAZEBO_MODEL_PATH VARIABLE, UNLESS AN ABSOLUTE PATH TO THE URDF IS PROVIDED.")
 
@@ -134,7 +135,7 @@ class PandaPickAndPlace(Node):
         self._num_joints = self._panda.num_joints
 
         self._joint_states: JointState = JointState()
-        self._joint_targets: JointState = JointState()
+        self._joint_targets: List[float] = [0.] * self._num_joints
         self._joint_states.velocity = [0.] * self._num_joints
         self._joint_states.effort = [0.] * self._num_joints
         self._joint_targets.velocity = [0.] * self._num_joints
@@ -153,7 +154,7 @@ class PandaPickAndPlace(Node):
         self._end_effector_target: Odometry = copy.deepcopy(self._end_effector_current)
 
         # At the start, the fingers should be OPEN
-        self._joint_targets[-2:] = self._panda.move_fingers(list(self._joint_targets), FingersAction.OPEN)[-2:]
+        self._joint_targets[-2:] = self._panda.move_fingers(self._joint_targets, FingersAction.OPEN)[-2:]
 
         # Create the RViz helper for visualizing the waypoints and trajectories
         self._rviz_helper = RVizHelper(self)
@@ -313,7 +314,7 @@ class PandaPickAndPlace(Node):
                 # Keep waiting (give the fingers some time to finish closing)
                 self._wait += 1
 
-                self._joint_targets[-2:] = self._panda.move_fingers(list(self._joint_targets), FingersAction.CLOSE)[-2:]
+                self._joint_targets[-2:] = self._panda.move_fingers(self._joint_targets, FingersAction.CLOSE)[-2:]
 
             else:
                 self._wait = 0
@@ -336,7 +337,7 @@ class PandaPickAndPlace(Node):
 
             else:
                 # Go back to the home position and wait until another box has spawned
-                self._joint_targets[-2:] = self._panda.move_fingers(list(self._joint_targets), FingersAction.OPEN)[-2:]
+                self._joint_targets[-2:] = self._panda.move_fingers(self._joint_targets, FingersAction.OPEN)[-2:]
 
                 if self._wait < 2 * self._max_wait:
                     # Keep waiting
