@@ -80,7 +80,7 @@ class PandaPickAndPlace(Node):
         self._joint_commands_publisher.publish(msg)
 
         # Set an end effector target
-        self._end_effector_current = self._panda.solve_fk(self._joint_states.position, self._joint_states.velocity)
+        self._end_effector_current = self._panda.solve_fk(self._joint_states, remap=False)
         self._joint_targets = self._panda.solve_ik(self._end_effector_current)
         self._end_effector_target = copy.deepcopy(self._end_effector_current)
 
@@ -120,7 +120,7 @@ class PandaPickAndPlace(Node):
         self._joint_states = joint_states
 
         # Calculate the end effector location relative to the base from forward kinematics
-        self._end_effector_current = self._panda.solve_fk(self._joint_states.position, self._joint_states.velocity)
+        self._end_effector_current = self._panda.solve_fk(self._joint_states)
 
         if self.end_effector_reached():
             # sample a new end effector target

@@ -4,6 +4,7 @@
 
 import os
 import enum
+import copy
 import numpy as np
 from ..rbd.idyntree import numpy
 from typing import List
@@ -77,6 +78,9 @@ class Panda():
         self._finger_joint_tag = self._node_handle.get_parameter('finger_joint_tag').value
         self._arm_joint_tag = self._node_handle.get_parameter('arm_joint_tag').value
 
+        # ROS seems to arbitrarily rearrange the names of the joints specified in the ros_control YAML. So, we need to specify the joint remapping be querying it from the parameter server.
+        self._joint_states_remapping = {}
+
         for joint_idx in range(self._articulated_system.getNrOfJoints()):
             joint_name = self._articulated_system.getJointName(joint_idx)
 
@@ -85,6 +89,10 @@ class Panda():
             # Get the names of joints to be included in optimization. Joint names containing the 'exclude tag' (e.g. the fingers) should not be considered by the IK algorithm
             joint_obj = self._articulated_system.getJoint(joint_idx)
             if joint_obj.enablePosLimits(True): # can't enable joint limits for a fixed joint; so this method will return 'False'
+
+                self._node_handle.declare_parameter('joint_remapping.' + joint_name)
+                self._joint_states_remapping[joint_idx] = self._node_handle.get_parameter('joint_remapping.' + joint_name).value
+
                 if self._finger_joint_tag in joint_name:
                     # Get the joint names from the model
                     self._joint_names.append(joint_name)
@@ -131,11 +139,13 @@ class Panda():
 
         self._rot = np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]])
 
-    def solve_fk(self, joint_positions: List[float], joint_velocities: List[float]) -> Odometry:
+    def solve_fk(self, joint_states: JointState, remap=True) -> Odometry:
         """ Returns an end effector odometry message """
 
+        self.set_joint_states(joint_states, remap=remap)
+
         # Update the robot state
-        self._fk.setJointPos(numpy.FromNumPy.to_idyntree_dyn_vector(array=np.array(joint_positions)))
+        self._fk.setJointPos(numpy.FromNumPy.to_idyntree_dyn_vector(array=np.array(self._joint_states.position)))
 
         # get the end effector pose from the kinematic model
         end_effector_pose_in_base_frame = self._fk.getRelativeTransform(self.base_frame, self.end_effector_frame)
@@ -148,7 +158,7 @@ class Panda():
         self._fk.getFrameFreeFloatingJacobian(self.end_effector_frame, J)
         velocities = np.zeros((dofs,))
         for i, joint_idx in enumerate(self._arm_joint_names.keys()):
-            velocities[i+6] = joint_velocities[joint_idx]
+            velocities[i+6] = self._joint_states.velocity[joint_idx]
 
         end_effector_twist = np.matmul(J.toNumPy(), velocities[:, np.newaxis]).squeeze() # Double-check - is this in the right coordinate system?
 
@@ -302,9 +312,15 @@ class Panda():
 
         return self._joint_states
 
-    def set_joint_states(self, joint_states: JointState):
+    def set_joint_states(self, joint_states: JointState, remap=True):
 
-        self._joint_states = joint_states
+        if remap:
+            for right, left in zip(list(self._joint_states_remapping.values()), list(self._joint_states_remapping.keys())):
+                self._joint_states.position[left] = joint_states.position[right]
+                self._joint_states.velocity[left] = joint_states.velocity[right]
+                self._joint_states.effort[left] = joint_states.effort[right]
+        else:
+            self._joint_states = copy.deepcopy(joint_states)
 
     @property
     def joint_positions(self) -> List[float]:

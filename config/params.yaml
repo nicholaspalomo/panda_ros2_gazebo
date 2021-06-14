@@ -11,3 +11,13 @@ panda_pick_and_place:
     finger_joint_tag: 'finger' # tag for the joints to exclude from the IK optimization
     arm_joint_tag: 'panda_joint'
     initial_joint_angles: [0., -0.785, 0., -2.356, 0., 1.571, 0.785, 0., 0.]
+    joint_remapping: # necessary because ros messes up the joint states ordering
+      panda_joint1:         6
+      panda_joint2:         1
+      panda_joint3:         8
+      panda_joint4:         3
+      panda_joint5:         2
+      panda_joint6:         4
+      panda_joint7:         5
+      panda_finger_joint1:  0
+      panda_finger_joint2:  7
