@@ -273,7 +273,7 @@ class Panda():
 
         return self._initial_joint_position_targets
 
-    def move_fingers(self, joint_positions: List[float], action: FingersAction = FingersAction.OPEN):
+    def move_fingers(self, joint_positions: List[float], action: FingersAction = FingersAction.OPEN) -> List[float]:
         # Returns a vector of joint positions in which the fingers are 'OPEN' or 'CLOSED', depending on the value of 'action'
 
         for finger_idx, finger_limits in self.finger_joint_limits.items():
@@ -285,7 +285,7 @@ class Panda():
                 joint_positions[finger_idx] = finger_limits[0]
                 self._node_handle.get_logger().info('CLOSING THE GRIPPER...')
 
-        return joint_positions.copy()
+        return joint_positions
 
     @property
     def num_joints(self) -> int:

@@ -135,10 +135,8 @@ class PandaPickAndPlace(Node):
         self._num_joints = self._panda.num_joints
 
         self._joint_states: JointState = JointState()
-        self._joint_targets: List[float] = [0.] * self._num_joints
         self._joint_states.velocity = [0.] * self._num_joints
         self._joint_states.effort = [0.] * self._num_joints
-        self._joint_targets.velocity = [0.] * self._num_joints
         self._joint_states.effort = [0.] * self._num_joints
 
         # Publish initial joint states target
@@ -150,7 +148,7 @@ class PandaPickAndPlace(Node):
         # Set an end effector target
         self._panda.set_joint_states(self._joint_states)
         self._end_effector_current: Odometry = copy.deepcopy(self._panda.end_effector_odom)
-        self._joint_targets.position = self._panda.solve_ik(self._end_effector_current)
+        self._joint_targets: List[float] = copy.deepcopy(self._joint_states.position)
         self._end_effector_target: Odometry = copy.deepcopy(self._end_effector_current)
 
         # At the start, the fingers should be OPEN
@@ -188,7 +186,7 @@ class PandaPickAndPlace(Node):
                             mask: np.ndarray = np.array([1., 1., 1.])) -> bool:
 
         if self._state == StateMachineAction.HOME:
-            end_effector_reached = np.linalg.norm(np.array(self._joint_states.position) - np.array(self._joint_targets.position)) < max_error_pos
+            end_effector_reached = np.linalg.norm(np.array(self._joint_states.position) - np.array(self._joint_targets)) < max_error_pos
 
             end_effector_reached = end_effector_reached and np.linalg.norm(np.array(self._joint_states.velocity)) < max_error_vel
 
@@ -283,7 +281,7 @@ class PandaPickAndPlace(Node):
                 self._end_effector_target.pose.pose.orientation.z = quat_xyzw[2]
                 self._end_effector_target.pose.pose.orientation.w = quat_xyzw[3]
 
-                self._joint_targets.position = self._panda.solve_ik(self._end_effector_target)
+                self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
                 # Go to the location where the box is and hover above it
                 self._state = StateMachineAction.HOVER
@@ -301,7 +299,7 @@ class PandaPickAndPlace(Node):
                 # Lower the gripper and close it around the cube
                 self._end_effector_target.pose.pose.position.z -= 3. / 100.
 
-                self._joint_targets.position = self._panda.solve_ik(self._end_effector_target)
+                self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
                 # Pick up the box
                 self._state = StateMachineAction.GRAB
@@ -322,7 +320,7 @@ class PandaPickAndPlace(Node):
                 # set the height again to 3 cm above the ground
                 self._end_effector_target.pose.pose.position.z += 3. / 100.
 
-                self._joint_targets.position = self._panda.solve_ik(self._end_effector_target)
+                self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
                 # Deliver the box to its location. Maybe hover above the location before dropping the box
                 self._state = StateMachineAction.DELIVER
@@ -347,7 +345,7 @@ class PandaPickAndPlace(Node):
                     self._wait = 0
 
                     # Return to the home position and spawn the box in a new location
-                    self._joint_targets.position = self._panda.reset_model()
+                    self._joint_targets = self._panda.reset_model()
 
                     self._state = StateMachineAction.HOME
 

@@ -80,7 +80,7 @@ class PandaFollowCircle(Node):
         # Set an end effector target
         self._panda.set_joint_states(self._joint_states)
         self._end_effector_current = copy.deepcopy(self._panda.end_effector_odom)
-        self._joint_targets = self._panda.solve_ik(self._end_effector_current)
+        self._joint_targets = copy.deepcopy(self._joint_states.position)
         self._end_effector_target = copy.deepcopy(self._end_effector_current)
 
         # Create the RViz helper for visualizing the waypoints and trajectories
