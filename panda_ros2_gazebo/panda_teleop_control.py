@@ -94,6 +94,7 @@ class PandaTeleopControl(Node):
     def callback_end_effector_target(self, end_effector_target: Odometry):
 
         self._end_effector_target = end_effector_target
+        self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
     def callback_actuate_gripper(self, request: Empty.Request, response: Empty.Response):
 
@@ -159,20 +160,3 @@ class PandaTeleopControl(Node):
             (np.linalg.norm(velocity[:3]) < max_error_vel)
 
         return end_effector_reached
-
-def main(args=None):
-    rclpy.init(args=args)
-
-    pick_and_place = PandaPickAndPlace()
-
-    rclpy.spin(pick_and_place)
-
-    # Destroy the node explicitly
-    # (optional - otherwise it will be done automatically
-    # when the garbage collector destroys the node object)
-    pick_and_place.destroy_node()
-    rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()
