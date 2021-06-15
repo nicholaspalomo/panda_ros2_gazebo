@@ -26,10 +26,12 @@ setup(
     version="0.0.1",
     packages=[
         package_name,
-        package_name + '.scripts',
-        package_name + '.scripts.models',
-        package_name + '.scripts.rbd',
-        package_name + '.scripts.rbd.idyntree'],
+        package_name + '.examples',
+        package_name + '.examples.helpers',
+        package_name + '.examples.scripts',
+        package_name + '.examples.scripts.models',
+        package_name + '.examples.scripts.rbd',
+        package_name + '.examples.scripts.rbd.idyntree'],
     data_files=data_files,
     install_requires=["setuptools"],
     zip_safe=True,
@@ -51,8 +53,8 @@ Panda demo in ROS2.""",
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "panda_pick_and_place = \
-                panda_ros2_gazebo.panda_pick_and_place:main",
+            "panda = \
+                panda_ros2_gazebo.runner:main",
         ],
     },
 )
