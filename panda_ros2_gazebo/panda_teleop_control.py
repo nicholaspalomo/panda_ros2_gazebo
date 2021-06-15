@@ -62,8 +62,8 @@ class PandaTeleopControl(Node):
 
         # Create joint commands, end effector publishers; subscribe to joint state
         self._joint_commands_publisher = self.create_publisher(Float64MultiArray, self.get_parameter('joint_control_topic').value, 10)
-        self._end_effector_target_subscriber = self.create_subscription(Odometry, self.get_parameter('end_effector_target_topic').value, 10)
-        self._end_effector_pose_publisher = self.create_publisher(Odometry, self.get_parameter('end_effector_pose_topic').value, self.callback_end_effector_target, 10)
+        self._end_effector_target_subscriber = self.create_subscription(Odometry, self.get_parameter('end_effector_target_topic').value, self.callback_end_effector_target, 10)
+        self._end_effector_pose_publisher = self.create_publisher(Odometry, self.get_parameter('end_effector_pose_topic').value, 10)
         self._joint_states_subscriber = self.create_subscription(JointState, '/joint_states', self.callback_joint_states, 10)
         self._control_dt = self.get_parameter('control_dt').value
 
