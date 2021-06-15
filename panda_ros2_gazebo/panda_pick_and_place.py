@@ -155,8 +155,6 @@ class PandaPickAndPlace(Node):
                             max_error_rot: float = 0.05,
                             max_error_vel: float = 0.1,
                             mask: np.ndarray = np.array([1., 1., 1.])) -> bool:
-        
-        # TODO: Visualize the position target markers in RViz 
 
         # Check the position to see if the target has been reached
         position = np.array([
@@ -200,10 +198,6 @@ class PandaPickAndPlace(Node):
 
         end_effector_reached = end_effector_reached and (np.pi - np.linalg.norm(rot_vec) < max_error_rot) and (np.linalg.norm(velocity[3:]) < max_error_vel)
 
-        # self.get_logger().info('ERROR NORM:\n{}'.format(np.linalg.norm(masked_current - masked_target)))
-        # self.get_logger().info('END EFFECTOR POSE:\n{}'.format(self._end_effector_current.pose.pose.position))
-        # self.get_logger().info('END EFFECTOR TARGET:\n{}'.format(self._end_effector_target.pose.pose.position))
-
         return True # end_effector_reached
 
     def sample_end_effector_target(self) -> Odometry:
@@ -243,15 +237,15 @@ class PandaPickAndPlace(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    # pick_and_place = PandaPickAndPlace()
-    teleop_control = PandaTeleopControl()
+    # node = PandaPickAndPlace()
+    node = PandaTeleopControl()
 
-    rclpy.spin(teleop_control)
+    rclpy.spin(node)
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
     # when the garbage collector destroys the node object)
-    teleop_control.destroy_node()
+    node.destroy_node()
     rclpy.shutdown()
 
 
