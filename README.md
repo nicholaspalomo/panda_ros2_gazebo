@@ -35,6 +35,7 @@ Now you can proceed to build the code:
 $ cd ..
 $ colcon build --merge-install
 ```
+## Running the Examples
 
 After the build process has completed, source your colcon workspace:
 ```
