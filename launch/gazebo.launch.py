@@ -6,7 +6,6 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 import launch_ros
 import os
 
-
 def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time', default='false')
     pkg_share = launch_ros.substitutions.FindPackageShare(package='panda_ros2_gazebo').find('panda_ros2_gazebo')

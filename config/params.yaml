@@ -1,4 +1,4 @@
-panda_pick_and_place:
+panda:
   ros__parameters:
     control_dt: 0.5 # 2 Hz
     joint_controller_name: 'joint_group_position_controller'

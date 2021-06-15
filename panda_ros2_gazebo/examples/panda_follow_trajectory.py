@@ -8,7 +8,6 @@ from scipy.spatial.transform import Rotation as R
 import copy
 
 # ROS2 Python API libraries
-import rclpy
 from rclpy.node import Node
 
 # ROS2 message and service data structures
@@ -19,27 +18,14 @@ from rcl_interfaces.srv import GetParameters
 
 # Panda kinematic model
 from .scripts.models.panda import Panda, FingersAction
-from .rviz_helper import RVizHelper
-
-# For communication with the teleop node
-from std_srvs.srv import Empty
+from .helpers.rviz_helper import RVizHelper
 
 # Configure numpy output
 np.set_printoptions(precision=4, suppress=True)
 
-def quat_mult(q0, q1):
-    # Function to multiply two quaternions of the form (i, j, k, re)
-
-    x0, y0, z0, w0 = q0
-    x1, y1, z1, w1 = q1
-    return np.array([-x1 * x0 - y1 * y0 - z1 * z0 + w1 * w0,
-                     x1 * w0 + y1 * z0 - z1 * y0 + w1 * x0,
-                     -x1 * z0 + y1 * w0 + z1 * x0 + w1 * y0,
-                     x1 * y0 - y1 * x0 + z1 * w0 + w1 * z0], dtype=np.float64)
-
-class PandaTeleopControl(Node):
+class PandaFollowTrajectory(Node):
     def __init__(self):
-        super().__init__('pick_and_place')
+        super().__init__('panda')
 
         # Declare parameters that are loaded from params.yaml to the parameter server
         self.declare_parameters(
@@ -62,13 +48,10 @@ class PandaTeleopControl(Node):
 
         # Create joint commands, end effector publishers; subscribe to joint state
         self._joint_commands_publisher = self.create_publisher(Float64MultiArray, self.get_parameter('joint_control_topic').value, 10)
-        self._end_effector_target_subscriber = self.create_subscription(Odometry, self.get_parameter('end_effector_target_topic').value, self.callback_end_effector_target, 10)
+        self._end_effector_target_publisher = self.create_publisher(Odometry, self.get_parameter('end_effector_target_topic').value, 10)
         self._end_effector_pose_publisher = self.create_publisher(Odometry, self.get_parameter('end_effector_pose_topic').value, 10)
         self._joint_states_subscriber = self.create_subscription(JointState, '/joint_states', self.callback_joint_states, 10)
         self._control_dt = self.get_parameter('control_dt').value
-
-        # Create the service for opening/closing the gripper
-        self._actuate_gripper_service = self.create_service(Empty, 'actuate_gripper', self.callback_actuate_gripper)
 
         self._panda = Panda(self)
         self._num_joints = self._panda.num_joints
@@ -91,19 +74,33 @@ class PandaTeleopControl(Node):
         # Create the RViz helper for visualizing the waypoints and trajectories
         self._rviz_helper = RVizHelper(self)
 
-    def callback_end_effector_target(self, end_effector_target: Odometry):
+    def setup_joint_group_effort_controller(self):
 
-        self._end_effector_target = end_effector_target
-        self._joint_targets = self._panda.solve_ik(self._end_effector_target)
+        self._err = np.zeros((self._num_joints,))
+        self._int_err = np.zeros((self._num_joints,))
 
-    def callback_actuate_gripper(self, request: Empty.Request, response: Empty.Response):
+        joint_controller_name = self.get_parameter('joint_controller_name')
 
-        if self._panda.gripper_state == FingersAction.CLOSE: # if the grippers are CLOSED, OPEN them
-            self._joint_targets[-2:] = self._panda.move_fingers(list(self._joint_targets), FingersAction.OPEN)[-2:]
-        else: # if the grippers are OPEN, CLOSE them
-            self._joint_targets[-2:] = self._panda.move_fingers(list(self._joint_targets), FingersAction.CLOSE)[-2:]
+        # create a service client to retrieve the PID gains from the joint_group_effort_controller
+        self._parameter_getter_client = self.create_client(GetParameters, '/' + joint_controller_name + '/get_parameters')
+        while not self._parameter_getter_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('service not available, waiting again...')
 
-        return Empty.Response()
+        self._request = GetParameters.Request()
+        self._response = GetParameters.Response()
+
+        self._p_gains = np.zeros((self._num_joints,))
+        self._i_gains = np.zeros((self._num_joints,))
+        self._d_gains = np.zeros((self._num_joints,))
+        for i, joint in enumerate(self._panda.joint_names):
+            
+            self._request.names = {'gains.' + joint + '.p', 'gains.' + joint + '.i', 'gains.' + joint + '.d'}
+
+            self._response = self._parameter_getter_client.call_async(self._request)
+
+            self._p_gains[i] = self._response.values[0]
+            self._i_gains[i] = self._response.values[1]
+            self._d_gains[i] = self._response.values[2]
 
     def callback_joint_states(self, joint_states):
 
@@ -115,8 +112,10 @@ class PandaTeleopControl(Node):
         if self.end_effector_reached():
             # sample a new end effector target
             self.get_logger().info('END EFFECTOR TARGET REACHED!')
+            self.sample_end_effector_target()
 
         # Publish the end effector target and odometry messages
+        self._end_effector_target_publisher.publish(self._end_effector_target)
         self._end_effector_pose_publisher.publish(self._end_effector_current)
 
         # Update the RViz helper and publish
@@ -128,6 +127,21 @@ class PandaTeleopControl(Node):
 
         msg = Float64MultiArray()
         msg.data = list(self._joint_targets)
+        self._joint_commands_publisher.publish(msg)
+
+    def joint_group_effort_controller_callback(self) -> None:
+
+        # compute the effort from 
+        err = self._joint_targets - self._joint_states.position
+        self._int_err += self._control_dt * err
+        deriv_err = (err - self._err) / self._control_dt
+
+        self._effort = np.multiply(self._p_gains, err) + np.multiply(self._i_gains, self._int_err) + np.multiply(self._d_gains, deriv_err)
+
+        self._err = err
+
+        msg = Float64MultiArray()
+        msg.data = self._effort.copy()
         self._joint_commands_publisher.publish(msg)
 
     def end_effector_reached(self,
@@ -159,4 +173,38 @@ class PandaTeleopControl(Node):
         end_effector_reached = (np.linalg.norm(masked_current - masked_target) < max_error_pos) and \
             (np.linalg.norm(velocity[:3]) < max_error_vel)
 
-        return end_effector_reached
+        return True # end_effector_reached
+
+    def sample_end_effector_target(self) -> Odometry:
+
+        # Sample a new target position...
+        self._end_effector_target.header.stamp = self.get_clock().now().to_msg()
+        self._end_effector_target.pose.pose.position.x = 0.4
+        self._end_effector_target.pose.pose.position.y = 0.2 * np.cos(0.5 * self.get_clock().now().seconds_nanoseconds()[0])
+        self._end_effector_target.pose.pose.position.z = 0.2 * np.sin(0.5 * self.get_clock().now().seconds_nanoseconds()[0]) + 0.6
+
+        # ...and a new target orientation
+        r = 0. # np.random.uniform(low=-np.pi/4, high=np.pi/4)
+        p = 0. # np.random.uniform(low=-np.pi/4, high=np.pi/4)
+        y = 0. # np.random.uniform(low=-np.pi/4, high=np.pi/4)
+
+        quat_xyzw = R.from_euler('xyz', [r, p, y], degrees=False).as_quat()
+        self._end_effector_target.pose.pose.orientation.x = quat_xyzw[0]
+        self._end_effector_target.pose.pose.orientation.y = quat_xyzw[1]
+        self._end_effector_target.pose.pose.orientation.z = quat_xyzw[2]
+        self._end_effector_target.pose.pose.orientation.w = quat_xyzw[3]
+
+        self.get_logger().info("END EFFECTOR TARGET SET TO:\n[x, y z]=[{}, {}, {}]\n[r, p , y]=[{}, {}, {}]".format(
+            self._end_effector_target.pose.pose.position.x,
+            self._end_effector_target.pose.pose.position.y,
+            self._end_effector_target.pose.pose.position.z,
+            r, p, y
+        ))
+
+        self._joint_targets = self._panda.solve_ik(self._end_effector_target)
+
+        # Sample whether or not the fingers should be open or closed
+        if random.random() > 0.5:
+            self._joint_targets[-2:] = self._panda.move_fingers(list(self._joint_targets), FingersAction.OPEN)[-2:]
+        else:
+            self._joint_targets[-2:] = self._panda.move_fingers(list(self._joint_targets), FingersAction.CLOSE)[-2:]
