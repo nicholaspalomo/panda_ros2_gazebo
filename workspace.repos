@@ -27,3 +27,7 @@ repositories:
     type: git
     url: https://github.com/nicholaspalomo/panda_teleop.git
     version: main
+  idyntree:
+    type: git
+    url: https://github.com/robotology/idyntree
+    version: master
