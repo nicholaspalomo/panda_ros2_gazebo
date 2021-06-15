@@ -137,6 +137,9 @@ class Panda():
         self._srv_gazebo_unpause = self._node_handle.create_client(Empty, '/gazebo/unpause_physics')
         self._srv_set_model_state = self._node_handle.create_client(SetEntityState, '/gazebo/set_entity_state')
 
+        # Create an object for the fingers state
+        self._gripper_state: FingersAction = FingersAction.OPEN
+
         self._rot = np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]])
 
     def solve_fk(self, joint_states: JointState, remap=True) -> Odometry:
@@ -280,6 +283,8 @@ class Panda():
                 joint_positions[finger_idx] = finger_limits[0]
                 self._node_handle.get_logger().info('CLOSING THE GRIPPER...')
 
+        self._gripper_state = action
+
         return joint_positions.copy()
 
     @property
@@ -311,6 +316,11 @@ class Panda():
     def joint_states(self) -> JointState:
 
         return self._joint_states
+
+    @property
+    def gripper_state(self) -> FingersAction:
+
+        return self._gripper_state
 
     def set_joint_states(self, joint_states: JointState, remap=True):
 
