@@ -103,9 +103,8 @@ class PandaTeleopControl(Node):
         # Calculate the end effector location relative to the base from forward kinematics
         self._end_effector_current = self._panda.solve_fk(self._joint_states)
 
-        if self.end_effector_reached():
-            # sample a new end effector target
-            self.get_logger().info('END EFFECTOR TARGET REACHED!')
+        # if self.end_effector_reached():
+        #     self.get_logger().info('END EFFECTOR TARGET REACHED!')
 
         # Publish the end effector target and odometry messages
         self._end_effector_pose_publisher.publish(self._end_effector_current)

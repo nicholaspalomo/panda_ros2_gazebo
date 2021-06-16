@@ -111,7 +111,6 @@ class PandaFollowTrajectory(Node):
 
         if self.end_effector_reached():
             # sample a new end effector target
-            self.get_logger().info('END EFFECTOR TARGET REACHED!')
             self.sample_end_effector_target()
 
         # Publish the end effector target and odometry messages
@@ -194,12 +193,12 @@ class PandaFollowTrajectory(Node):
         self._end_effector_target.pose.pose.orientation.z = quat_xyzw[2]
         self._end_effector_target.pose.pose.orientation.w = quat_xyzw[3]
 
-        self.get_logger().info("END EFFECTOR TARGET SET TO:\n[x, y z]=[{}, {}, {}]\n[r, p , y]=[{}, {}, {}]".format(
-            self._end_effector_target.pose.pose.position.x,
-            self._end_effector_target.pose.pose.position.y,
-            self._end_effector_target.pose.pose.position.z,
-            r, p, y
-        ))
+        # self.get_logger().info("END EFFECTOR TARGET SET TO:\n[x, y z]=[{}, {}, {}]\n[r, p , y]=[{}, {}, {}]".format(
+        #     self._end_effector_target.pose.pose.position.x,
+        #     self._end_effector_target.pose.pose.position.y,
+        #     self._end_effector_target.pose.pose.position.z,
+        #     r, p, y
+        # ))
 
         self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 

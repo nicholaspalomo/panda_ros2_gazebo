@@ -277,11 +277,9 @@ class Panda():
         for finger_idx, finger_limits in self.finger_joint_limits.items():
             if action is FingersAction.OPEN:
                 joint_positions[finger_idx] = finger_limits[1]
-                self._node_handle.get_logger().info('OPENING THE GRIPPER...')
 
             if action is FingersAction.CLOSE:
                 joint_positions[finger_idx] = finger_limits[0]
-                self._node_handle.get_logger().info('CLOSING THE GRIPPER...')
 
         self._gripper_state = action
 
