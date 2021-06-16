@@ -11,23 +11,12 @@ First, please ensure that your system meets the basic requirements to build and 
 - Ubuntu 20.04 LTS
 - ROS2 Foxy
 
-This project depends [iDynTree](https://github.com/robotology/idyntree) library from the Italian Institute of Technology. DO NOT install it via pip; rather install it from source. It is also recommended that you do this outside your colcon workspace. For Debian/Ubuntu, first install the required and optional dependencies:
+This project depends [iDynTree](https://github.com/robotology/idyntree) library from the Italian Institute of Technology. For Debian/Ubuntu, first install the required and optional dependencies:
 
 ```
 sudo apt-get install libeigen3-dev libxml2-dev coinor-libipopt-dev qtbase5-dev qtdeclarative5-dev qtmultimedia5-dev qml-module-qtquick2 qml-module-qtquick-window2 qml-module-qtmultimedia qml-module-qtquick-dialogs qml-module-qtquick-controls qml-module-qt-labs-folderlistmodel qml-module-qt-labs-settings
 ```
 If you're not running Debian/Ubuntu on your machine, please consult the platform-specific installation instructions [here](https://github.com/robotology/idyntree#installation).
-
-Then, proceed to build and install iDynTree as follows. You also need a working `swig` installation on your machine as well as an up-to-date installation of `scipy`. Don't forget to use the `IDYNTREE_USES_IPOPT` flag when running the `cmake` command!
-
-```
-$ git clone https://github.com/robotology/idyntree
-$ cd idyntree
-$ mkdir build && cd build
-$ cmake -DIDYNTREE_USES_IPOPT ..
-$ make
-$ [sudo] make install
-```
 
 Now, clone this repository into your colcon workspace:
 ```
@@ -46,6 +35,7 @@ Now you can proceed to build the code:
 $ cd ..
 $ colcon build --merge-install
 ```
+## Running the Examples
 
 After the build process has completed, source your colcon workspace:
 ```
@@ -54,17 +44,28 @@ $ source install/setup.bash
 
 Launch the simulation:
 ```
-$ ros2 launch panda_ros2_gazebo panda_ros2_gazebo.launch.py
+$ ros2 launch panda_ros2_gazebo gazebo.launch.py
 ```
 
 This will bring up the Gazebo simulation and the RViz visualization. It will also spawn the joint controllers. Note: The robot will just be laying on the floor at the moment since the joint controllers have not actually received any setpoint yet!
 
 To launch the node that will compute the inverse kinematics and publish the setpoints to the joint controllers, open a new terminal and navigate to the root of your colcon workspace. After sourcing your workspace, launch the node with:
 ```
-$ ros2 launch panda_ros2_gazebo panda_pick_and_place.launch.py
+$ ros2 launch panda_ros2_gazebo bringup.launch.py name:=<demo>
 ```
+where `<demo>` is the name of the demo you wish to run. Note that at the moment there are two demos available:
 
-You will see the arm start to move around, going from setpoint to setpoint.
+- `follow` - the Panda will just follow a circular trajectory, and
+- `teleop` - control the Panda with full teleoperation. See the documentation [here](https://github.com/nicholaspalomo/panda_teleop).
+
+After launching the teleop example, open a new terminal and source your colcon workspace.
+
+You can launch the teleop node control the end effector (including the grippers) after launching the node with:
+
+```
+$ ros2 launch panda_teleop panda_teleop_control.launch.py 
+```
+and following the instructions that appear in the terminal.
 
 ## Repository Structure
 
@@ -79,10 +80,12 @@ You will see the arm start to move around, going from setpoint to setpoint.
     └── worlds                  # Panda world definitions
 ├── launch                      # ROS launch scripts
 ├── panda_ros2_gazebo           # Node definition and IK scripts
-    └── scripts                 # IK scripts
-        ├── model               # Panda forward/inverse kinematic model
-        └── rbd                 # Rigid body dynamics utility scripts and class definitions
-            └── idyntree        # Python interface for iDyntree bindings
+    └── examples                # Example nodes to run
+        ├── scripts             # IK scripts
+            ├── model           # Panda forward/inverse kinematic model
+            └── rbd             # Rigid body dynamics utility scripts and class definitions
+                └── idyntree    # Python interface for iDyntree bindings
+        └── helpers             # Helper scripts for the examples
 ├── resource                    # Resource directory for ROS2
 └── rviz                        # RViz configuration
 ```
