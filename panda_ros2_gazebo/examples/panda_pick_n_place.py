@@ -60,8 +60,6 @@ def check_service_call_completed(node: Node, response: Future):
         raise RuntimeError(
             'EXCEPTION WHILE CALLING SERVICE: %r' % response.exception())
 
-# TODO: Visualize the robot end configuration before the robot goes there. Maybe spawn a second instance of the panda robot for that and set the transparency to something reasonable (e.g. alpha = 0.1)
-
 class PandaPickAndPlace(Node):
     def __init__(self):
         super().__init__('panda')
@@ -85,14 +83,6 @@ class PandaPickAndPlace(Node):
             ]
         )
 
-        # TODO: SetEntityState not working
-        # if not result.success:
-        #     self._set_model_state_request.state.pose = copy.deepcopy(self._cube_pose)
-        #     self._set_model_state_request.state.name = "cube"
-        #     self._set_model_state_request.state.reference_frame = "panda_link0"
-        #     response = self._set_model_state_client.call_async(self._set_model_state_request)
-        #     result = check_service_call_completed(self, response)
-
         # TODO: Visualize the cube in RViz using the mesh resource approach. See the answer given here for how to do that: https://answers.ros.org/question/217324/visualizing-gazebo-model-in-rviz/
 
         # Timestep counter for how much time the robot should wait before transitioning to the next state.
@@ -112,21 +102,29 @@ class PandaPickAndPlace(Node):
         self._joint_states: JointState = JointState()
         self._joint_states.velocity = [0.] * self._num_joints
         self._joint_states.effort = [0.] * self._num_joints
-        self._joint_states.effort = [0.] * self._num_joints
 
         # Publish initial joint states target
-        msg = Float64MultiArray()
         self._joint_states.position = self._panda.reset_model()
-        msg.data = self._joint_states.position
-        self._joint_commands_publisher.publish(msg)
 
         # Set an end effector target
         self._end_effector_current = self._panda.solve_fk(self._joint_states, remap=False)
-        self._joint_targets: List[float] = self._panda.solve_ik(self._end_effector_current)
+
         self._end_effector_target: Odometry = copy.deepcopy(self._end_effector_current)
+        quat_xyzw = R.from_euler(seq="y", angles=90, degrees=True).as_quat()
+        self._end_effector_target.pose.pose.orientation.x = quat_xyzw[0]
+        self._end_effector_target.pose.pose.orientation.y = quat_xyzw[1]
+        self._end_effector_target.pose.pose.orientation.z = quat_xyzw[2]
+        self._end_effector_target.pose.pose.orientation.w = quat_xyzw[3]
+        self._initial_end_effector_target = copy.deepcopy(self._end_effector_target)
+
+        self._joint_targets: List[float] = self._panda.solve_ik(self._end_effector_target)
 
         # At the start, the fingers should be OPEN
         self._joint_targets[-2:] = self._panda.move_fingers(self._joint_targets, FingersAction.OPEN)[-2:]
+
+        msg = Float64MultiArray()
+        msg.data = list(self._joint_targets.copy())
+        self._joint_commands_publisher.publish(msg)
 
         # Create the RViz helper for visualizing the waypoints and trajectories
         self._rviz_helper = RVizHelper(self)
@@ -134,7 +132,7 @@ class PandaPickAndPlace(Node):
         # Save the current state of the state machine
         self._state : StateMachineAction = StateMachineAction.HOME
 
-                # Declare service for spawning objects
+        # Declare service for spawning objects
         self._spawn_model_client = self.create_client(SpawnEntity, '/spawn_entity')
 
         self.get_logger().info("CONNECTING TO `/spawn_entity` SERVICE...")
@@ -147,20 +145,23 @@ class PandaPickAndPlace(Node):
         self._cube_pose.position.x = 0.4 # [m]
         self._cube_pose.position.y = 0.0 # [m]
         self._cube_pose.position.z = 5/2 * 0.01 # [m]
+        self._cube_pose.orientation.w = 1.0
 
+        # Initialize the cube spawn request
+        self._cube_counter = 0
         self._spawn_model_request: SpawnEntity.Request = SpawnEntity.Request()
+        self._spawn_model_request.xml = MODEL_DATABASE_TEMPLATE.format('wood_cube_5cm')
+        self._spawn_model_request.reference_frame = "panda_link0"
 
         self._set_model_state_client = self.create_client(SetEntityState, '/set_entity_state')
         self._set_model_state_request: SetEntityState.Request = SetEntityState.Request()
-
-        # Initialize and spawn the box into the simulation, can repeatedly change the location of it using "set model state"
-        self._cube_counter = 0
-        self._spawn_model_request.name = "cube{}".format(self._cube_counter)
-        self._spawn_model_request.xml = MODEL_DATABASE_TEMPLATE.format('wood_cube_5cm')
-        self._spawn_model_request.reference_frame = "panda_link0"
-        self._spawn_model_request.initial_pose = copy.deepcopy(self._cube_pose)
-        response = self._spawn_model_client.call_async(self._spawn_model_request)
-        result = check_service_call_completed(self, response)
+        # TODO: SetEntityState not working
+        # if not result.success:
+        #     self._set_model_state_request.state.pose = copy.deepcopy(self._cube_pose)
+        #     self._set_model_state_request.state.name = "cube"
+        #     self._set_model_state_request.state.reference_frame = "panda_link0"
+        #     response = self._set_model_state_client.call_async(self._set_model_state_request)
+        #     result = check_service_call_completed(self, response)
 
     def callback_joint_states(self, joint_states):
 
@@ -214,17 +215,20 @@ class PandaPickAndPlace(Node):
 
     def joint_group_position_controller_callback(self) -> None:
 
-        if self._state == StateMachineAction.HOME:
-            self._joint_targets[-2:] = self._panda.move_fingers(self._joint_targets, FingersAction.OPEN)[-2:]
+        quat_xyzw = R.from_euler(seq="xyz", angles=[0, 90, 0], degrees=True).as_quat()
+        self._end_effector_target.pose.pose.orientation.x = quat_xyzw[0]
+        self._end_effector_target.pose.pose.orientation.y = quat_xyzw[1]
+        self._end_effector_target.pose.pose.orientation.z = quat_xyzw[2]
+        self._end_effector_target.pose.pose.orientation.w = quat_xyzw[3]
+        self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
-        if self._state == StateMachineAction.GRAB:
-            self._joint_targets[-2:] = self._panda.move_fingers(self._joint_targets, FingersAction.OPEN)[-2:]
-
-        if self._state == StateMachineAction.HOVER:
-            self._joint_targets[-2:] = self._panda.move_fingers(self._joint_targets, FingersAction.OPEN)[-2:]
-
-        if self._state == StateMachineAction.DELIVER:
+        if self._state == StateMachineAction.DELIVER or self._state == StateMachineAction.GRAB:
             self._joint_targets[-2:] = self._panda.move_fingers(self._joint_targets, FingersAction.CLOSE)[-2:]
+        else:
+            self._joint_targets[-2:] = self._panda.move_fingers(self._joint_targets, FingersAction.OPEN)[-2:]
+
+        if self._wait > self._max_wait:
+            self._joint_targets[-2:] = self._panda.move_fingers(self._joint_targets, FingersAction.OPEN)[-2:]
 
         msg = Float64MultiArray()
         msg.data = list(self._joint_targets)
@@ -233,29 +237,28 @@ class PandaPickAndPlace(Node):
     def sample_new_cube_pose(self):
 
         # TODO: Sample new pose for the cube
-        random_position = np.random.uniform(low=[0.2, -0.3, 0.025], high=[0.4, 0.3, 0.025])
+        random_position = np.random.uniform(low=[0.3, -0.2], high=[0.7, 0.2])
         self._cube_pose.position.x = random_position[0]
         self._cube_pose.position.y = random_position[1]
-        self._cube_pose.position.z = random_position[2]
+        self._cube_pose.position.z = 0.03
 
         # Spawn a new cube
-        self._cube_counter += 1
-        self._spawn_model_request.name = "cube{}".format(self._cube_counter)
-        self._spawn_model_request.xml = MODEL_DATABASE_TEMPLATE.format('wood_cube_5cm')
+        self._spawn_model_request.name = "cube{}".format(str(self._cube_counter))
         self._spawn_model_request.initial_pose = copy.deepcopy(self._cube_pose)
         response = self._spawn_model_client.call_async(self._spawn_model_request)
-        check_service_call_completed(self, response)
+        # check_service_call_completed(self, response)
+
+        self._cube_counter += 1
 
     def get_next_target(self):
-        hover_height = 0.08
-        grab_height = 0.02
-
-        # TODO: Need to update the end_effector_reached function to double check that the gripper state has been reached as well
-        # TODO: In each state, need to define the end effector position and the length of time (or the number of time steps the robot should remain in that state once it has been reached)
-        # TODO: Maybe in addition to an end_effector_reached function, you should also right a function to check if the task has been completed
+        hover_height = 0.30
+        grab_height = 0.03
 
         # If the current state is "HOME" position and the target location has been reached
         if self._state == StateMachineAction.HOME and self.end_effector_reached():
+
+            if self._wait == 0:
+                self.sample_new_cube_pose()
 
             if self._wait < self._max_wait:
                 # Keep waiting
@@ -264,29 +267,21 @@ class PandaPickAndPlace(Node):
             else:
                 self._wait = 0
 
-                # Set the end effector target to the cube pose
-                self._end_effector_target.pose.pose = copy.deepcopy(self._cube_pose)
-                self._end_effector_target.pose.pose.position.z = hover_height # hover 3 cm above the cube
-                quat_xyzw = R.from_euler(seq="y", angles=90, degrees=True).as_quat()
-                self._end_effector_target.pose.pose.orientation.x = quat_xyzw[0]
-                self._end_effector_target.pose.pose.orientation.y = quat_xyzw[1]
-                self._end_effector_target.pose.pose.orientation.z = quat_xyzw[2]
-                self._end_effector_target.pose.pose.orientation.w = quat_xyzw[3]
-
-                self._joint_targets = self._panda.solve_ik(self._end_effector_target)
-
                 # Go to the location where the box is and hover above it
                 self._state = StateMachineAction.HOVER
+
+                # Set the end effector target to the cube pose
+                self._end_effector_target.pose.pose = copy.deepcopy(self._cube_pose)
+                self._end_effector_target.pose.pose.position.x += 0.01
+                self._end_effector_target.pose.pose.position.z = hover_height # hover 3 cm above the cube
 
             return
 
         if self._state == StateMachineAction.HOVER and self.end_effector_reached():
 
             if self._wait < self._max_wait:
-                # Lower the gripper and close it around the cube
-                self._end_effector_target.pose.pose.position.z = grab_height + (1 - self._wait/self._max_wait) * (hover_height - grab_height)
-
-                self._joint_targets = self._panda.solve_ik(self._end_effector_target)
+                # Lower the gripper
+                self._end_effector_target.pose.pose.position.z = grab_height + (1 - self._wait/(self._max_wait-1)) * (hover_height - grab_height)
 
                 # Keep waiting
                 self._wait += 1
@@ -296,8 +291,6 @@ class PandaPickAndPlace(Node):
                 # Lower the gripper and close it around the cube
                 self._end_effector_target.pose.pose.position.z = grab_height
 
-                self._joint_targets = self._panda.solve_ik(self._end_effector_target)
-
                 # Pick up the box
                 self._state = StateMachineAction.GRAB
 
@@ -306,16 +299,19 @@ class PandaPickAndPlace(Node):
         if self._state == StateMachineAction.GRAB and self.end_effector_reached():
 
             if self._wait < self._max_wait:
+                # Raise the gripper
+                self._end_effector_target.pose.pose.position.z = grab_height + (self._wait/(self._max_wait-1)) * (hover_height - grab_height)
+
                 # Keep waiting (give the fingers some time to finish closing)
                 self._wait += 1
 
             else:
                 self._wait = 0
 
-                # set the height again to 3 cm above the ground
+                # Set the location for the delivery target
+                self._end_effector_target.pose.pose.position.x = 0.03 * self._cube_counter + 0.3
+                self._end_effector_target.pose.pose.position.y = 0.3
                 self._end_effector_target.pose.pose.position.z = hover_height
-
-                self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
                 # Deliver the box to its location. Maybe hover above the location before dropping the box
                 self._state = StateMachineAction.DELIVER
@@ -326,12 +322,18 @@ class PandaPickAndPlace(Node):
         if self._state == StateMachineAction.DELIVER and self.end_effector_reached():
 
             if self._wait < self._max_wait:
+                # Lower the gripper
+                self._end_effector_target.pose.pose.position.z = grab_height + (1 - self._wait/(self._max_wait-1)) * (hover_height - grab_height)
+
                 # Keep waiting
                 self._wait += 1
 
             else:
 
                 if self._wait < 2 * self._max_wait:
+                    # Raise the gripper
+                    self._end_effector_target.pose.pose.position.z = grab_height + (self._wait/(2 * self._max_wait-1)) * (hover_height - grab_height)
+
                     # Keep waiting
                     self._wait += 1
 
@@ -339,16 +341,8 @@ class PandaPickAndPlace(Node):
                     self._wait = 0
 
                     # Return to the home position and spawn the box in a new location
-                    self._joint_targets = self._panda.reset_model()
-
-                    joint_target = JointState()
-                    joint_target.position = self._joint_targets.copy()
-                    joint_target.velocity = [0.] * self._num_joints
-                    joint_target.effort = [0.] * self._num_joints
-
-                    self._end_effector_target = self._panda.solve_fk(joint_target, remap=False)
-
-                    # reset the internal joint states
-                    _ = self._panda.solve_fk(self._joint_states)
+                    self._end_effector_target = copy.deepcopy(self._initial_end_effector_target)
 
                     self._state = StateMachineAction.HOME
+
+                    print("RETURNING TO HOME")
