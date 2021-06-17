@@ -302,7 +302,7 @@ class PandaPickAndPlace(Node):
                 self._wait = 0
 
                 # Set the location for the delivery target
-                self._end_effector_target.pose.pose.position.x = 0.03 * self._cube_counter + 0.3
+                self._end_effector_target.pose.pose.position.x = 0.03 * self._cube_counter + 0.2
                 self._end_effector_target.pose.pose.position.y = 0.35
                 self._end_effector_target.pose.pose.position.z = hover_height
 
