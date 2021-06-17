@@ -80,7 +80,7 @@ class PandaPickAndPlace(Node):
 
         # Timestep counter for how much time the robot should wait before transitioning to the next state.
         self._wait = 0
-        self._max_wait = 100
+        self._max_wait = 200
 
         # Create joint commands, end effector publishers; subscribe to joint state
         self._joint_commands_publisher = self.create_publisher(Float64MultiArray, self.get_parameter('joint_control_topic').value, 10)
@@ -112,6 +112,8 @@ class PandaPickAndPlace(Node):
         self._initial_end_effector_target = copy.deepcopy(self._end_effector_target)
 
         self._joint_targets: List[float] = self._panda.solve_ik(self._end_effector_target)
+        self._joint_targets_finish: List[float] = self._joint_targets.copy()
+        self._joint_targets_start: List[float] = self._joint_targets.copy()
 
         # At the start, the fingers should be OPEN
         self._joint_targets[-2:] = self._panda.move_fingers(self._joint_targets, FingersAction.OPEN)[-2:]
@@ -209,19 +211,12 @@ class PandaPickAndPlace(Node):
 
     def joint_group_position_controller_callback(self) -> None:
 
-        quat_xyzw = R.from_euler(seq="xyz", angles=[0, 90, 0], degrees=True).as_quat()
-        self._end_effector_target.pose.pose.orientation.x = quat_xyzw[0]
-        self._end_effector_target.pose.pose.orientation.y = quat_xyzw[1]
-        self._end_effector_target.pose.pose.orientation.z = quat_xyzw[2]
-        self._end_effector_target.pose.pose.orientation.w = quat_xyzw[3]
-        self._joint_targets = self._panda.solve_ik(self._end_effector_target)
-
         if self._state == StateMachineAction.DELIVER or self._state == StateMachineAction.GRAB:
             self._joint_targets[-2:] = self._panda.move_fingers(self._joint_targets, FingersAction.CLOSE)[-2:]
         else:
             self._joint_targets[-2:] = self._panda.move_fingers(self._joint_targets, FingersAction.OPEN)[-2:]
 
-        if self._wait > self._max_wait:
+        if self._wait > 2 * self._max_wait:
             self._joint_targets[-2:] = self._panda.move_fingers(self._joint_targets, FingersAction.OPEN)[-2:]
 
         msg = Float64MultiArray()
@@ -243,15 +238,23 @@ class PandaPickAndPlace(Node):
 
         self._cube_counter += 1
 
+    def interp_joint_targets(self, joint_target: List[float], joint_targets_finish: List[float], joint_targets_start: List[float], num_steps):
+
+        return [jt + (jf - js) / (num_steps - 1) for jt, jf, js in zip(joint_target, joint_targets_finish, joint_targets_start)].copy()
+
     def get_next_target(self):
         hover_height = 0.30
+        box_height = 0.05
         grab_height = 0.03
+
+        quat_xyzw = R.from_euler(seq="xyz", angles=[0, 90, 90], degrees=True).as_quat()
+        self._end_effector_target.pose.pose.orientation.x = quat_xyzw[0]
+        self._end_effector_target.pose.pose.orientation.y = quat_xyzw[1]
+        self._end_effector_target.pose.pose.orientation.z = quat_xyzw[2]
+        self._end_effector_target.pose.pose.orientation.w = quat_xyzw[3]
 
         # If the current state is "HOME" position and the target location has been reached
         if self._state == StateMachineAction.HOME and self.end_effector_reached():
-
-            if self._wait == 0:
-                self.sample_new_cube_pose()
 
             if self._wait < self._max_wait:
                 # Keep waiting
@@ -264,78 +267,117 @@ class PandaPickAndPlace(Node):
                 self._state = StateMachineAction.HOVER
 
                 # Set the end effector target to the cube pose
-                self._end_effector_target.pose.pose = copy.deepcopy(self._cube_pose)
-                self._end_effector_target.pose.pose.position.x += 0.01
+                self.sample_new_cube_pose()
+                self._end_effector_target.pose.pose.position = copy.deepcopy(self._cube_pose.position)
+                self._end_effector_target.pose.pose.position.y += 0.02
                 self._end_effector_target.pose.pose.position.z = hover_height # hover above the cube
+
+                self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
             return
 
-        if self._state == StateMachineAction.HOVER and self.end_effector_reached():
+        if self._state == StateMachineAction.HOVER:
+
+            if self._wait == 0:
+                self._end_effector_target.pose.pose.position.z = grab_height
+
+                self._joint_targets_start = self._joint_targets.copy()
+                self._joint_targets_finish = self._panda.solve_ik(self._end_effector_target)
 
             if self._wait < self._max_wait:
                 # Lower the gripper
                 self._end_effector_target.pose.pose.position.z = grab_height + (1 - self._wait/(self._max_wait-1)) * (hover_height - grab_height)
 
+                self._joint_targets = self.interp_joint_targets(self._joint_targets, self._joint_targets_finish, self._joint_targets_start, self._max_wait)
+
                 # Keep waiting
                 self._wait += 1
             else:
                 self._wait = 0
-
-                # Lower the gripper and close it around the cube
-                self._end_effector_target.pose.pose.position.z = grab_height
 
                 # Pick up the box
                 self._state = StateMachineAction.GRAB
 
             return
 
-        if self._state == StateMachineAction.GRAB and self.end_effector_reached():
+        if self._state == StateMachineAction.GRAB:
 
-            if self._wait < self._max_wait:
+            if self._wait == self._max_wait:
+                self._end_effector_target.pose.pose.position.z = hover_height
+
+                self._joint_targets_start = self._joint_targets.copy()
+                self._joint_targets_finish = self._panda.solve_ik(self._end_effector_target)
+
+            if self._wait < 2 * self._max_wait and self._wait >= self._max_wait:
                 # Raise the gripper
-                self._end_effector_target.pose.pose.position.z = grab_height + (self._wait/(self._max_wait-1)) * (hover_height - grab_height)
+                self._end_effector_target.pose.pose.position.z = grab_height + ((self._wait - self._max_wait)/(self._max_wait - 1)) * (hover_height - grab_height)
 
-                # Keep waiting (give the fingers some time to finish closing)
-                self._wait += 1
+                self._joint_targets = self.interp_joint_targets(self._joint_targets, self._joint_targets_finish, self._joint_targets_start, self._max_wait)
 
-            else:
+            self._wait += 1
+
+            if self._wait == 2 * self._max_wait:
                 self._wait = 0
 
                 # Set the location for the delivery target
-                self._end_effector_target.pose.pose.position.x = 0.03 * self._cube_counter + 0.2
-                self._end_effector_target.pose.pose.position.y = 0.35
-                self._end_effector_target.pose.pose.position.z = hover_height
+                self._end_effector_target.pose.pose.position.x = 0.3
+                self._end_effector_target.pose.pose.position.y = 0.5
+                self._end_effector_target.pose.pose.position.z = (self._cube_counter + 0.5) * box_height
+
+                self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
                 # Deliver the box to its location. Maybe hover above the location before dropping the box
                 self._state = StateMachineAction.DELIVER
 
             return
 
+        if self._state == StateMachineAction.DELIVER:
+            goal = (self._cube_counter - 0.5) * box_height
+            grab_height = goal + 0.25 * box_height
+            hover_height = goal + box_height
 
-        if self._state == StateMachineAction.DELIVER and self.end_effector_reached():
+            if self._wait == 0 and self.end_effector_reached():
+                self._end_effector_target.pose.pose.position.z = grab_height
 
-            if self._wait < self._max_wait:
+                self._joint_targets_start = self._joint_targets.copy()
+                self._joint_targets_finish = self._panda.solve_ik(self._end_effector_target)
+
+                self._wait += 1
+
+            if self._wait == 2 * self._max_wait:
+                self._end_effector_target.pose.pose.position.z = hover_height
+
+                self._joint_targets_start = self._joint_targets.copy()
+                self._joint_targets_finish = self._panda.solve_ik(self._end_effector_target)
+
+            if self._wait >= self._max_wait:
+                self._wait += 1
+
+            if self._wait < self._max_wait and self._wait > 0:
                 # Lower the gripper
                 self._end_effector_target.pose.pose.position.z = grab_height + (1 - self._wait/(self._max_wait-1)) * (hover_height - grab_height)
+
+                self._joint_targets = self.interp_joint_targets(self._joint_targets, self._joint_targets_finish, self._joint_targets_start, self._max_wait)
 
                 # Keep waiting
                 self._wait += 1
 
             else:
 
-                if self._wait < 2 * self._max_wait:
+                if self._wait < 3 * self._max_wait and self._wait > self._max_wait * 2:
                     # Raise the gripper
-                    self._end_effector_target.pose.pose.position.z = grab_height + (self._wait/(2 * self._max_wait-1)) * (hover_height - grab_height)
+                    self._end_effector_target.pose.pose.position.z = grab_height + ((self._wait - 2 * self._max_wait) / (self._max_wait - 1)) * (hover_height - grab_height)
 
-                    # Keep waiting
-                    self._wait += 1
+                    self._joint_targets = self.interp_joint_targets(self._joint_targets, self._joint_targets_finish, self._joint_targets_start, self._max_wait)
 
-                else:
-                    self._wait = 0
+            if self._wait == 3 * self._max_wait:
+                self._wait = 0
 
-                    # Return to the home position and spawn the box in a new location
-                    self._end_effector_target = copy.deepcopy(self._initial_end_effector_target)
+                # Return to the home position and spawn the box in a new location
+                self._end_effector_target = copy.deepcopy(self._initial_end_effector_target)
 
-                    self._state = StateMachineAction.HOME
+                self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
-                    print("RETURNING TO HOME")
+                self._state = StateMachineAction.HOME
+
+                print("RETURNING TO HOME")
