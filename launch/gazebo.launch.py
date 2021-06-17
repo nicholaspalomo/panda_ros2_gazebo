@@ -17,12 +17,20 @@ def generate_launch_description():
     )
     default_rviz_config_path = os.path.join(pkg_share, 'rviz/rviz.rviz')
 
-    gazebo = IncludeLaunchDescription(
+    gzclient = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-                os.path.join(get_package_share_directory("gazebo_ros"), "launch", "gazebo.launch.py")
+                os.path.join(get_package_share_directory("gazebo_ros"), "launch", "gzserver.launch.py")
+        ),
+        launch_arguments={"verbose": "true"}.items(), # "extra_gazebo_args": "-s libgazebo_ros_p3d.so"
+    )
+
+    gzserver = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+                os.path.join(get_package_share_directory("gazebo_ros"), "launch", "gzclient.launch.py")
         ),
         launch_arguments={"verbose": "true"}.items(),
     )
+
     robot_state_publisher_node = launch_ros.actions.Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
@@ -85,7 +93,8 @@ def generate_launch_description():
         spawn_joint_state_broadcaster,
         robot_state_publisher_node,
         rviz_node,
-        gazebo,
+        gzclient,
+        gzserver,
         spawn_entity,
         spawn_controller
         # joint_state_publisher_node,
