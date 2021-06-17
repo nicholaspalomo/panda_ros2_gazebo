@@ -68,6 +68,7 @@ $ ros2 launch panda_teleop panda_teleop_control.launch.py
 ```
 and following the instructions that appear in the terminal.
 
+![Alt Text](media/pick_and_place.gif)
 ## Repository Structure
 
 ```bash
