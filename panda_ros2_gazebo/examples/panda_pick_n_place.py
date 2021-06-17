@@ -2,9 +2,6 @@
 # This software may be modified and distributed under the terms of the
 # GNU Lesser General Public License v2.1 or any later version.
 
-# Example of Panda robot picking up an object and putting it in a specified location
-# TODO: have the robot stack the blocks
-
 import enum
 import copy
 import numpy as np
@@ -27,10 +24,8 @@ from .scripts.models.panda import Panda, FingersAction
 from .helpers.rviz_helper import RVizHelper
 
 # For spawning entities into Gazebo
-import xml
 from geometry_msgs.msg import Pose
-from gazebo_msgs.srv import SpawnEntity, GetEntityState, SetEntityState, GetModelState, SetModelState
-from gazebo_msgs.msg import EntityState
+from gazebo_msgs.srv import SpawnEntity, GetEntityState, SetEntityState
 from rclpy.task import Future
 
 MODEL_DATABASE_TEMPLATE = """\
@@ -83,8 +78,6 @@ class PandaPickAndPlace(Node):
             ]
         )
 
-        # TODO: Visualize the cube in RViz using the mesh resource approach. See the answer given here for how to do that: https://answers.ros.org/question/217324/visualizing-gazebo-model-in-rviz/
-
         # Timestep counter for how much time the robot should wait before transitioning to the next state.
         self._wait = 0
         self._max_wait = 100
@@ -95,6 +88,7 @@ class PandaPickAndPlace(Node):
         self._end_effector_pose_publisher = self.create_publisher(Odometry, self.get_parameter('end_effector_pose_topic').value, 10)
         self._joint_states_subscriber = self.create_subscription(JointState, '/joint_states', self.callback_joint_states, 10)
         self._control_dt = self.get_parameter('control_dt').value
+        base_link_frame = self.get_parameter('base_frame').value
 
         self._panda = Panda(self)
         self._num_joints = self._panda.num_joints
@@ -151,7 +145,7 @@ class PandaPickAndPlace(Node):
         self._cube_counter = 0
         self._spawn_model_request: SpawnEntity.Request = SpawnEntity.Request()
         self._spawn_model_request.xml = MODEL_DATABASE_TEMPLATE.format('wood_cube_5cm')
-        self._spawn_model_request.reference_frame = "panda_link0"
+        self._spawn_model_request.reference_frame = base_link_frame
 
         self._set_model_state_client = self.create_client(SetEntityState, '/set_entity_state')
         self._set_model_state_request: SetEntityState.Request = SetEntityState.Request()
@@ -159,7 +153,7 @@ class PandaPickAndPlace(Node):
         # if not result.success:
         #     self._set_model_state_request.state.pose = copy.deepcopy(self._cube_pose)
         #     self._set_model_state_request.state.name = "cube"
-        #     self._set_model_state_request.state.reference_frame = "panda_link0"
+        #     self._set_model_state_request.state.reference_frame = base_link_frame
         #     response = self._set_model_state_client.call_async(self._set_model_state_request)
         #     result = check_service_call_completed(self, response)
 
@@ -236,8 +230,8 @@ class PandaPickAndPlace(Node):
 
     def sample_new_cube_pose(self):
 
-        # TODO: Sample new pose for the cube
-        random_position = np.random.uniform(low=[0.3, -0.2], high=[0.7, 0.2])
+        # Sample new pose for the cube
+        random_position = np.random.uniform(low=[0.3, -0.10], high=[0.7, 0.30])
         self._cube_pose.position.x = random_position[0]
         self._cube_pose.position.y = random_position[1]
         self._cube_pose.position.z = 0.03
@@ -245,8 +239,7 @@ class PandaPickAndPlace(Node):
         # Spawn a new cube
         self._spawn_model_request.name = "cube{}".format(str(self._cube_counter))
         self._spawn_model_request.initial_pose = copy.deepcopy(self._cube_pose)
-        response = self._spawn_model_client.call_async(self._spawn_model_request)
-        # check_service_call_completed(self, response)
+        _ = self._spawn_model_client.call_async(self._spawn_model_request)
 
         self._cube_counter += 1
 
@@ -273,7 +266,7 @@ class PandaPickAndPlace(Node):
                 # Set the end effector target to the cube pose
                 self._end_effector_target.pose.pose = copy.deepcopy(self._cube_pose)
                 self._end_effector_target.pose.pose.position.x += 0.01
-                self._end_effector_target.pose.pose.position.z = hover_height # hover 3 cm above the cube
+                self._end_effector_target.pose.pose.position.z = hover_height # hover above the cube
 
             return
 
@@ -310,7 +303,7 @@ class PandaPickAndPlace(Node):
 
                 # Set the location for the delivery target
                 self._end_effector_target.pose.pose.position.x = 0.03 * self._cube_counter + 0.3
-                self._end_effector_target.pose.pose.position.y = 0.3
+                self._end_effector_target.pose.pose.position.y = 0.35
                 self._end_effector_target.pose.pose.position.z = hover_height
 
                 # Deliver the box to its location. Maybe hover above the location before dropping the box
