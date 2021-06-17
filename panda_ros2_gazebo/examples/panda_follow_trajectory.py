@@ -20,9 +20,6 @@ from rcl_interfaces.srv import GetParameters
 from .scripts.models.panda import Panda, FingersAction
 from .helpers.rviz_helper import RVizHelper
 
-# Misc
-from .helpers import quat_mult
-
 class PandaFollowTrajectory(Node):
     def __init__(self):
         super().__init__('panda')
