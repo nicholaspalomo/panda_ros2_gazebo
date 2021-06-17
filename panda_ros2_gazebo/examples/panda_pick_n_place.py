@@ -322,7 +322,7 @@ class PandaPickAndPlace(Node):
                 # Set the location for the delivery target
                 self._end_effector_target.pose.pose.position.x = 0.3
                 self._end_effector_target.pose.pose.position.y = 0.5
-                self._end_effector_target.pose.pose.position.z = (self._cube_counter + 0.5) * box_height
+                self._end_effector_target.pose.pose.position.z = max((self._cube_counter + 0.5) * box_height, hover_height)
 
                 self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
