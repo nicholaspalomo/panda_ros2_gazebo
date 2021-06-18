@@ -150,15 +150,17 @@ class PandaPickAndInsert(Node):
         self._cube_pose.orientation.w = 1.0
 
         # Initialize the cube spawn request
-        path = os.path.join(
-            self.get_parameter('share_dir').value, 
-            'description', 
-            'models', 
-            'sparkplug',
-            'sparkplug.urdf')
-
         self._cube_counter = 0
         self._spawn_model_request: SpawnEntity.Request = SpawnEntity.Request()
+
+        # Spawn the sparkplug insertion fixture into the simulation
+        self._spawn_model_request.xml = MODEL_DATABASE_TEMPLATE.format("sparkplug_socket")
+        self._spawn_model_request.reference_frame = base_link_frame
+        self._spawn_model_request.name = "sparkplug_socket"
+        self._spawn_model_request.initial_pose = Pose()
+        _ = self._spawn_model_client.call_async(self._spawn_model_request)
+
+        # Set the XML for the call to spawn sparkplug in simulation
         self._spawn_model_request.xml = MODEL_DATABASE_TEMPLATE.format("sparkplug")
         self._spawn_model_request.reference_frame = base_link_frame
 
