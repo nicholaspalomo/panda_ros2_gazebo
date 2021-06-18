@@ -1,7 +1,7 @@
 from ament_index_python.packages import get_package_share_directory
 import launch
 from launch.substitutions import Command, LaunchConfiguration
-from launch.actions import IncludeLaunchDescription
+from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 import launch_ros
 import os
@@ -11,26 +11,22 @@ def generate_launch_description():
     pkg_share = launch_ros.substitutions.FindPackageShare(package='panda_ros2_gazebo').find('panda_ros2_gazebo')
     default_model_path = os.path.join(pkg_share,
         "description",
-        "models",
-        "panda",
-        "panda.urdf",
+        "models"
     )
+    default_urdf_path = os.path.join(default_model_path, "panda", "panda.urdf")
     default_rviz_config_path = os.path.join(pkg_share, 'rviz/rviz.rviz')
-
     gzclient = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
                 os.path.join(get_package_share_directory("gazebo_ros"), "launch", "gzserver.launch.py")
         ),
         launch_arguments={"verbose": "true"}.items(), # "extra_gazebo_args": "-s libgazebo_ros_p3d.so"
     )
-
     gzserver = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
                 os.path.join(get_package_share_directory("gazebo_ros"), "launch", "gzclient.launch.py")
         ),
         launch_arguments={"verbose": "true"}.items(),
     )
-
     robot_state_publisher_node = launch_ros.actions.Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
@@ -71,22 +67,25 @@ def generate_launch_description():
         arguments=["joint_group_position_controller", "--param-file", effort_controller_config, "--controller-type", "effort_controllers/JointGroupPositionController"],
         output="screen",
     )
-
     spawn_joint_state_broadcaster = launch_ros.actions.Node(
         package="controller_manager",
         executable="spawner.py",
         arguments=["joint_state_broadcaster", "--controller-type", "joint_state_broadcaster/JointStateBroadcaster"],
         output="screen",
     )
+    gazebo_model_path = SetEnvironmentVariable(name='GAZEBO_MODEL_PATH', value=[default_model_path])
+    gazebo_media_path = SetEnvironmentVariable(name='GAZEBO_MEDIA_PATH', value=[default_model_path])
 
     return launch.LaunchDescription([
+        gazebo_model_path,
+        gazebo_media_path,
         launch.actions.DeclareLaunchArgument(
             'use_sim_time',
             default_value='false',
             description='Use simulation (Gazebo) clock if true'),
         launch.actions.DeclareLaunchArgument(name='gui', default_value='false',
                                              description='Flag to enable joint_state_publisher_gui'),
-        launch.actions.DeclareLaunchArgument(name='model', default_value=default_model_path,
+        launch.actions.DeclareLaunchArgument(name='model', default_value=default_urdf_path,
                                              description='Absolute path to robot urdf file'),
         launch.actions.DeclareLaunchArgument(name='rvizconfig', default_value=default_rviz_config_path,
                                              description='Absolute path to rviz config file'),
