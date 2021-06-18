@@ -39,6 +39,7 @@ MODEL_DATABASE_TEMPLATE = """\
     <world name="default">
         <include>
             <uri>model://{}</uri>
+            <static>{}</static>
         </include>
     </world>
 </sdf>"""
@@ -154,14 +155,15 @@ class PandaPickAndInsert(Node):
         self._spawn_model_request: SpawnEntity.Request = SpawnEntity.Request()
 
         # Spawn the sparkplug insertion fixture into the simulation
-        self._spawn_model_request.xml = MODEL_DATABASE_TEMPLATE.format("sparkplug_socket")
+        self._spawn_model_request.xml = MODEL_DATABASE_TEMPLATE.format("sparkplug_socket", str(1))
         self._spawn_model_request.reference_frame = base_link_frame
         self._spawn_model_request.name = "sparkplug_socket"
         self._spawn_model_request.initial_pose = Pose()
+        self._spawn_model_request.initial_pose.position.x = 0.5
         _ = self._spawn_model_client.call_async(self._spawn_model_request)
 
         # Set the XML for the call to spawn sparkplug in simulation
-        self._spawn_model_request.xml = MODEL_DATABASE_TEMPLATE.format("sparkplug")
+        self._spawn_model_request.xml = MODEL_DATABASE_TEMPLATE.format("sparkplug", str(0))
         self._spawn_model_request.reference_frame = base_link_frame
 
         self._set_model_state_client = self.create_client(SetEntityState, '/set_entity_state')
