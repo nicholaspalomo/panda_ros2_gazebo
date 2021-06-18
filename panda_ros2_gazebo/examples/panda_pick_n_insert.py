@@ -144,14 +144,14 @@ class PandaPickAndInsert(Node):
             self.get_logger().info("...CONNECTED!")
         self.get_logger().info("[WARNING] ANY MODEL YOU WANT TO SPAWN USING THE GAZEBO `/spawn_entity` SERVICE MUST EXIST IN THE GAZEBO_MODEL_PATH VARIABLE, UNLESS AN ABSOLUTE PATH TO THE URDF IS PROVIDED.")
 
-        self._cube_pose: Pose = Pose()
-        self._cube_pose.position.x = 0.4 # [m]
-        self._cube_pose.position.y = 0.0 # [m]
-        self._cube_pose.position.z = 5/2 * 0.01 # [m]
-        self._cube_pose.orientation.w = 1.0
+        self._sparkplug_pose: Pose = Pose()
+        self._sparkplug_pose.position.x = 0.4 # [m]
+        self._sparkplug_pose.position.y = 0.0 # [m]
+        self._sparkplug_pose.position.z = 0.01 # [m]
+        self._sparkplug_pose.orientation.w = 1.0
 
-        # Initialize the cube spawn request
-        self._cube_counter = 0
+        # Initialize the sparkplug spawn request
+        self._sparkplug_counter = 0
         self._spawn_model_request: SpawnEntity.Request = SpawnEntity.Request()
 
         # Spawn the sparkplug insertion fixture into the simulation
@@ -170,8 +170,8 @@ class PandaPickAndInsert(Node):
         self._set_model_state_request: SetEntityState.Request = SetEntityState.Request()
         # TODO: SetEntityState not working
         # if not result.success:
-        #     self._set_model_state_request.state.pose = copy.deepcopy(self._cube_pose)
-        #     self._set_model_state_request.state.name = "cube"
+        #     self._set_model_state_request.state.pose = copy.deepcopy(self._sparkplug_pose)
+        #     self._set_model_state_request.state.name = "sparkplug"
         #     self._set_model_state_request.state.reference_frame = base_link_frame
         #     response = self._set_model_state_client.call_async(self._set_model_state_request)
         #     result = check_service_call_completed(self, response)
@@ -240,20 +240,20 @@ class PandaPickAndInsert(Node):
         msg.data = list(self._joint_targets)
         self._joint_commands_publisher.publish(msg)
 
-    def sample_new_cube_pose(self):
+    def sample_new_sparkplug_pose(self):
 
-        # Sample new pose for the cube
+        # Sample new pose for the sparkplug
         random_position = np.random.uniform(low=[0.3, -0.10], high=[0.7, 0.30])
-        self._cube_pose.position.x = random_position[0]
-        self._cube_pose.position.y = random_position[1]
-        self._cube_pose.position.z = 0.03
+        self._sparkplug_pose.position.x = random_position[0]
+        self._sparkplug_pose.position.y = random_position[1]
+        self._sparkplug_pose.position.z = 0.01
 
-        # Spawn a new cube
-        self._spawn_model_request.name = "cube{}".format(str(self._cube_counter))
-        self._spawn_model_request.initial_pose = copy.deepcopy(self._cube_pose)
+        # Spawn a new sparkplug
+        self._spawn_model_request.name = "sparkplug{}".format(str(self._sparkplug_counter))
+        self._spawn_model_request.initial_pose = copy.deepcopy(self._sparkplug_pose)
         _ = self._spawn_model_client.call_async(self._spawn_model_request)
 
-        self._cube_counter += 1
+        self._sparkplug_counter += 1
 
     def interp_joint_targets(self, joint_target: List[float], joint_targets_finish: List[float], joint_targets_start: List[float], num_steps):
 
@@ -261,10 +261,13 @@ class PandaPickAndInsert(Node):
 
     def get_next_target(self):
         hover_height = 0.30
-        box_height = 0.05
-        grab_height = 0.03
+        sparkplug_height = 0.02
+        grab_height = 0.01
 
-        quat_xyzw = R.from_euler(seq="xyz", angles=[0, 90, 90], degrees=True).as_quat()
+        if self._state != StateMachineAction.DELIVER:
+            quat_xyzw = R.from_euler(seq="y", angles=90, degrees=True).as_quat()
+        else:
+            quat_xyzw = R.from_euler(seq="xyz", angles=[0, 0, 0], degrees=True).as_quat()
         self._end_effector_target.pose.pose.orientation.x = quat_xyzw[0]
         self._end_effector_target.pose.pose.orientation.y = quat_xyzw[1]
         self._end_effector_target.pose.pose.orientation.z = quat_xyzw[2]
@@ -283,11 +286,11 @@ class PandaPickAndInsert(Node):
                 # Go to the location where the box is and hover above it
                 self._state = StateMachineAction.HOVER
 
-                # Set the end effector target to the cube pose
-                self.sample_new_cube_pose()
-                self._end_effector_target.pose.pose.position = copy.deepcopy(self._cube_pose.position)
+                # Set the end effector target to the sparkplug pose
+                self.sample_new_sparkplug_pose()
+                self._end_effector_target.pose.pose.position = copy.deepcopy(self._sparkplug_pose.position)
                 self._end_effector_target.pose.pose.position.y += 0.02
-                self._end_effector_target.pose.pose.position.z = hover_height # hover above the cube
+                self._end_effector_target.pose.pose.position.z = hover_height # hover above the sparkplug
 
                 self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
@@ -339,7 +342,7 @@ class PandaPickAndInsert(Node):
                 # Set the location for the delivery target
                 self._end_effector_target.pose.pose.position.x = 0.3
                 self._end_effector_target.pose.pose.position.y = 0.5
-                self._end_effector_target.pose.pose.position.z = max((self._cube_counter + 0.5) * box_height, hover_height)
+                self._end_effector_target.pose.pose.position.z = max((self._sparkplug_counter + 0.5) * sparkplug_height, hover_height)
 
                 self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
@@ -349,9 +352,9 @@ class PandaPickAndInsert(Node):
             return
 
         if self._state == StateMachineAction.DELIVER:
-            goal = (self._cube_counter - 0.5) * box_height
-            grab_height = goal + 0.25 * box_height
-            hover_height = goal + box_height
+            goal = (self._sparkplug_counter - 0.5) * sparkplug_height
+            grab_height = goal + 0.25 * sparkplug_height
+            hover_height = goal + sparkplug_height
 
             if self._wait == 0 and self.end_effector_reached():
                 self._end_effector_target.pose.pose.position.z = grab_height

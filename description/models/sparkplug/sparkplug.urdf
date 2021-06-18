@@ -17,9 +17,10 @@
       </material>
     </visual>
     <collision>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 1.57079632679 0" xyz="-0.012 0 0"/>
       <geometry>
-        <mesh filename="model://sparkplug/meshes/collision/sparkplug.stl"/>
+        <!-- <mesh filename="model://sparkplug_socket/meshes/collision/sparkplug_socket.stl"/> -->
+        <cylinder radius="0.009" length="0.072"/>
       </geometry>
     </collision>
   </link>
