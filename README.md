@@ -56,7 +56,8 @@ $ ros2 launch panda_ros2_gazebo bringup.launch.py name:=<demo>
 where `<demo>` is the name of the demo you wish to run. Note that at the moment there are three demos available:
 
 - `follow` - the Panda will just follow a circular trajectory, 
-- `picknplace` - the Panda will pick up cubes that are spawned at random locations in its workspace and attempt to stack them one on top of the other, and
+- `picknplace` - the Panda will pick up cubes that are spawned at random locations in its workspace and attempt to stack them one on top of the other,
+- `pickninsert` - the Panda will attempt to pick up and insert spark plugs into a panel of sockets, and
 - `teleop` - control the Panda with full teleoperation. See the documentation [here](https://github.com/nicholaspalomo/panda_teleop).
 
 After launching the teleop example, open a new terminal and source your colcon workspace.
