@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<robot name="sparkplug_socket">
+  <link name="sparkplug_socket">
+    <inertial>
+      <mass value="3.962"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <inertia ixx="7153.623" ixy="0" ixz="0" iyy="7153.62262" iyz="0" izz="13065.152"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="model://sparkplug_socket/meshes/visual/sparkplug_socket.stl"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0 0 0.8 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="model://sparkplug_socket/meshes/collision/sparkplug_socket.stl"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <gazebo reference="sparkplug_socket">
+    <material>Gazebo/White</material>
+    <static>true</static>
+    <turnGravityOff>true</turnGravityOff>
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <kp>10000.0</kp> 
+    <kd>1000</kd>
+  </gazebo>
+
+</robot>
