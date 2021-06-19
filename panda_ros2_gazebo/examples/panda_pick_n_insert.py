@@ -159,7 +159,7 @@ class PandaPickAndInsert(Node):
         self._spawn_model_request.reference_frame = base_link_frame
         self._spawn_model_request.name = "sparkplug_socket"
         self._spawn_model_request.initial_pose = Pose()
-        self._spawn_model_request.initial_pose.position.x = 0.5
+        self._spawn_model_request.initial_pose.position.x = 0.7
         _ = self._spawn_model_client.call_async(self._spawn_model_request)
 
         # Set the XML for the call to spawn sparkplug in simulation
@@ -243,10 +243,15 @@ class PandaPickAndInsert(Node):
     def sample_new_sparkplug_pose(self):
 
         # Sample new pose for the sparkplug
-        random_position = np.random.uniform(low=[0.3, -0.10], high=[0.7, 0.30])
+        random_position = np.random.uniform(low=[0.4, -0.1], high=[0.5, 0.1])
         self._sparkplug_pose.position.x = random_position[0]
         self._sparkplug_pose.position.y = random_position[1]
         self._sparkplug_pose.position.z = 0.01
+        quat = R.from_euler(seq="z", angles=180, degrees=True).as_quat()
+        self._sparkplug_pose.orientation.x = quat[0]
+        self._sparkplug_pose.orientation.y = quat[1]
+        self._sparkplug_pose.orientation.z = quat[2]
+        self._sparkplug_pose.orientation.w = quat[3]
 
         # Spawn a new sparkplug
         self._spawn_model_request.name = "sparkplug{}".format(str(self._sparkplug_counter))
@@ -260,14 +265,14 @@ class PandaPickAndInsert(Node):
         return [jt + (jf - js) / (num_steps - 1) for jt, jf, js in zip(joint_target, joint_targets_finish, joint_targets_start)].copy()
 
     def get_next_target(self):
-        hover_height = 0.30
+        hover_height = 0.20
         sparkplug_height = 0.02
         grab_height = 0.01
 
-        if self._state != StateMachineAction.DELIVER:
-            quat_xyzw = R.from_euler(seq="y", angles=90, degrees=True).as_quat()
-        else:
+        if self._state == StateMachineAction.HOVER and self._wait < self._max_wait and self._wait > 0:
             quat_xyzw = R.from_euler(seq="xyz", angles=[0, 0, 0], degrees=True).as_quat()
+        else:
+            quat_xyzw = R.from_euler(seq="y", angles=90, degrees=True).as_quat()
         self._end_effector_target.pose.pose.orientation.x = quat_xyzw[0]
         self._end_effector_target.pose.pose.orientation.y = quat_xyzw[1]
         self._end_effector_target.pose.pose.orientation.z = quat_xyzw[2]
@@ -289,7 +294,7 @@ class PandaPickAndInsert(Node):
                 # Set the end effector target to the sparkplug pose
                 self.sample_new_sparkplug_pose()
                 self._end_effector_target.pose.pose.position = copy.deepcopy(self._sparkplug_pose.position)
-                self._end_effector_target.pose.pose.position.y += 0.02
+                # self._end_effector_target.pose.pose.position.y += 0.02
                 self._end_effector_target.pose.pose.position.z = hover_height # hover above the sparkplug
 
                 self._joint_targets = self._panda.solve_ik(self._end_effector_target)
@@ -340,9 +345,9 @@ class PandaPickAndInsert(Node):
                 self._wait = 0
 
                 # Set the location for the delivery target
-                self._end_effector_target.pose.pose.position.x = 0.3
-                self._end_effector_target.pose.pose.position.y = 0.5
-                self._end_effector_target.pose.pose.position.z = max((self._sparkplug_counter + 0.5) * sparkplug_height, hover_height)
+                self._end_effector_target.pose.pose.position.x = 0.7 + (((self._sparkplug_counter - 1) % 4) - 2) * 0.0125
+                self._end_effector_target.pose.pose.position.y = (((self._sparkplug_counter - 1) % 4) - 2) * 0.0125
+                self._end_effector_target.pose.pose.position.z = hover_height
 
                 self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
@@ -352,7 +357,7 @@ class PandaPickAndInsert(Node):
             return
 
         if self._state == StateMachineAction.DELIVER:
-            goal = (self._sparkplug_counter - 0.5) * sparkplug_height
+            goal = 0.085
             grab_height = goal + 0.25 * sparkplug_height
             hover_height = goal + sparkplug_height
 
