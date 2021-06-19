@@ -6,6 +6,7 @@ import os
 import enum
 import copy
 import numpy as np
+import math
 from typing import List
 from scipy.spatial.transform import Rotation as R
 
@@ -297,7 +298,7 @@ class PandaPickAndInsert(Node):
                 # Set the end effector target to the sparkplug pose
                 self.sample_new_sparkplug_pose()
                 self._end_effector_target.pose.pose.position = copy.deepcopy(self._sparkplug_pose.position)
-                self._end_effector_target.pose.pose.position.x += 0.014
+                self._end_effector_target.pose.pose.position.x += 0.012
                 self._end_effector_target.pose.pose.position.z = hover_height # hover above the sparkplug
 
                 self._joint_targets = self._panda.solve_ik(self._end_effector_target)
@@ -348,27 +349,35 @@ class PandaPickAndInsert(Node):
             self._wait += 1
 
             if self._wait == 2 * self._max_wait:
-                self._wait = 0
 
                 # Set the location for the delivery target
-                self._end_effector_target.pose.pose.position.x = 0.25 + (((self._sparkplug_counter - 1) % 4) - 2) * 0.0125
-                self._end_effector_target.pose.pose.position.y = (((self._sparkplug_counter - 1) % 4) - 2) * 0.0125
+                self._end_effector_target.pose.pose.position.x = 0.25 - 52.5 / 1000. + 35. / 1000. * ((self._sparkplug_counter - 1) % 4) # The holes are (max) 52.5 mm from centerline of sparkplug tray and the centers are spaced 35.0 mm apart. 0.25 m is the distance of the center of the tray from the coordinate system of the base.
+                self._end_effector_target.pose.pose.position.y = - 52.5 / 1000. + 35. / 1000. * (((self._sparkplug_counter - 1) // 4) % 4)
                 self._end_effector_target.pose.pose.position.z = 0.2 + 2 * hover_height
 
-                self._joint_targets = self._panda.solve_ik(self._end_effector_target)
+                self._joint_targets = self._joint_targets.copy()
+                self._joint_targets_start = self._joint_targets.copy()
+                self._joint_targets_finish = self._panda.solve_ik(self._end_effector_target)
 
                 # Deliver the box to its location. Maybe hover above the location before dropping the box
                 self._state = StateMachineAction.DELIVER
 
+                self._wait = -3 * self._max_wait
+
             return
 
         if self._state == StateMachineAction.DELIVER:
-            goal = 0.2 + 0.12
+            goal = 0.2 + 0.07
             grab_height = goal + 0.25 * sparkplug_height
             hover_height = goal + sparkplug_height
 
+            if self._wait < 0:
+                self._joint_targets = self.interp_joint_targets(self._joint_targets, self._joint_targets_finish, self._joint_targets_start, 3 * self._max_wait)
+
+                self._wait += 1
+
             if self._wait == 0 and self.end_effector_reached():
-                # self._end_effector_target.pose.pose.position.x -= 0.014
+                self._end_effector_target.pose.pose.position.x += 0.01 # hack
                 self._end_effector_target.pose.pose.position.z = grab_height
 
                 self._joint_targets_start = self._joint_targets.copy()
@@ -413,3 +422,5 @@ class PandaPickAndInsert(Node):
                 self._state = StateMachineAction.HOME
 
                 print("RETURNING TO HOME")
+
+            return

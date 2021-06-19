@@ -2,9 +2,9 @@
 <robot name="sparkplug_socket">
   <link name="sparkplug_socket">
     <inertial>
-      <mass value="2.673"/>
+      <mass value="3.962"/>
       <origin rpy="0 0 0" xyz="0 0 0"/>
-      <inertia ixx="3075.73876" ixy="0" ixz="0" iyy="3075.739" iyz="0" izz="5466.756"/>
+      <inertia ixx="7153.623" ixy="0" ixz="0" iyy="7153.62262" iyz="0" izz="13065.152"/>
     </inertial>
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
