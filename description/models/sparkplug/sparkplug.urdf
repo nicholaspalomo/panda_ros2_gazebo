@@ -20,15 +20,16 @@
       <origin rpy="0 1.57079632679 0" xyz="-0.012 0 0"/>
       <geometry>
         <!-- <mesh filename="model://sparkplug_socket/meshes/collision/sparkplug_socket.stl"/> -->
-        <cylinder radius="0.009" length="0.072"/>
+        <!-- <cylinder radius="0.009" length="0.072"/> -->
+        <box size="0.0127 0.0127 0.072"/>
       </geometry>
     </collision>
   </link>
 
   <gazebo reference="sparkplug">
     <material>Gazebo/Purple</material>
-    <mu1>0.1</mu1>
-    <mu2>0.1</mu2>
+    <mu1>1.2</mu1>
+    <mu2>1.2</mu2>
     <kp>10000.0</kp> 
     <kd>1000</kd>
   </gazebo>

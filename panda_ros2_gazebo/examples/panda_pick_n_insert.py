@@ -153,17 +153,6 @@ class PandaPickAndInsert(Node):
         # Initialize the sparkplug spawn request
         self._sparkplug_counter = 0
         self._spawn_model_request: SpawnEntity.Request = SpawnEntity.Request()
-
-        # Spawn the sparkplug insertion fixture into the simulation
-        self._spawn_model_request.xml = MODEL_DATABASE_TEMPLATE.format("sparkplug_socket", str(1))
-        self._spawn_model_request.reference_frame = base_link_frame
-        self._spawn_model_request.name = "sparkplug_socket"
-        self._spawn_model_request.initial_pose = Pose()
-        self._spawn_model_request.initial_pose.position.x = 0.7
-        _ = self._spawn_model_client.call_async(self._spawn_model_request)
-
-        # Set the XML for the call to spawn sparkplug in simulation
-        self._spawn_model_request.xml = MODEL_DATABASE_TEMPLATE.format("sparkplug", str(0))
         self._spawn_model_request.reference_frame = base_link_frame
 
         self._set_model_state_client = self.create_client(SetEntityState, '/set_entity_state')
@@ -242,12 +231,24 @@ class PandaPickAndInsert(Node):
 
     def sample_new_sparkplug_pose(self):
 
+        # Spawn the sparkplug insertion fixture into the simulation
+        if self._sparkplug_counter == 0:
+            self._spawn_model_request.xml = MODEL_DATABASE_TEMPLATE.format("sparkplug_socket", str(1))
+            self._spawn_model_request.name = "sparkplug_socket"
+            self._spawn_model_request.initial_pose = Pose()
+            self._spawn_model_request.initial_pose.position.x = 0.25
+            self._spawn_model_request.initial_pose.position.z = 0.2
+            _ = self._spawn_model_client.call_async(self._spawn_model_request)
+
+        # Set the XML for the call to spawn sparkplug in simulation
+        self._spawn_model_request.xml = MODEL_DATABASE_TEMPLATE.format("sparkplug", str(0))
+
         # Sample new pose for the sparkplug
-        random_position = np.random.uniform(low=[0.4, -0.1], high=[0.5, 0.1])
+        random_position = np.random.uniform(low=[0.5, -0.2], high=[0.6, 0.2])
         self._sparkplug_pose.position.x = random_position[0]
         self._sparkplug_pose.position.y = random_position[1]
         self._sparkplug_pose.position.z = 0.01
-        quat = R.from_euler(seq="z", angles=180, degrees=True).as_quat()
+        quat = R.from_euler(seq="y", angles=90, degrees=True).as_quat()
         self._sparkplug_pose.orientation.x = quat[0]
         self._sparkplug_pose.orientation.y = quat[1]
         self._sparkplug_pose.orientation.z = quat[2]
@@ -267,19 +268,21 @@ class PandaPickAndInsert(Node):
     def get_next_target(self):
         hover_height = 0.20
         sparkplug_height = 0.02
-        grab_height = 0.01
+        grab_height = 0.05
 
-        if self._state == StateMachineAction.HOVER and self._wait < self._max_wait and self._wait > 0:
-            quat_xyzw = R.from_euler(seq="xyz", angles=[0, 0, 0], degrees=True).as_quat()
-        else:
-            quat_xyzw = R.from_euler(seq="y", angles=90, degrees=True).as_quat()
+        # if self._state == StateMachineAction.HOVER: # and self._wait < self._max_wait and self._wait > 0:
+        #     quat_xyzw = R.from_euler(seq="yxz", angles=[180, -90, 0], degrees=True).as_quat()
+        # if self._state == StateMachineAction.DELIVER:
+        #     quat_xyzw = R.from_euler(seq="xyz", angles=[0, 180 ,0], degrees=True).as_quat() # [180, 180, 0] ? 
+        # else:
+        quat_xyzw = R.from_euler(seq="y", angles=90, degrees=True).as_quat()
         self._end_effector_target.pose.pose.orientation.x = quat_xyzw[0]
         self._end_effector_target.pose.pose.orientation.y = quat_xyzw[1]
         self._end_effector_target.pose.pose.orientation.z = quat_xyzw[2]
         self._end_effector_target.pose.pose.orientation.w = quat_xyzw[3]
 
         # If the current state is "HOME" position and the target location has been reached
-        if self._state == StateMachineAction.HOME and self.end_effector_reached():
+        if self._state == StateMachineAction.HOME: # and self.end_effector_reached():
 
             if self._wait < self._max_wait:
                 # Keep waiting
@@ -294,7 +297,7 @@ class PandaPickAndInsert(Node):
                 # Set the end effector target to the sparkplug pose
                 self.sample_new_sparkplug_pose()
                 self._end_effector_target.pose.pose.position = copy.deepcopy(self._sparkplug_pose.position)
-                # self._end_effector_target.pose.pose.position.y += 0.02
+                self._end_effector_target.pose.pose.position.x += 0.014
                 self._end_effector_target.pose.pose.position.z = hover_height # hover above the sparkplug
 
                 self._joint_targets = self._panda.solve_ik(self._end_effector_target)
@@ -303,13 +306,15 @@ class PandaPickAndInsert(Node):
 
         if self._state == StateMachineAction.HOVER:
 
-            if self._wait == 0:
+            if self._wait == 0 and self.end_effector_reached():
                 self._end_effector_target.pose.pose.position.z = grab_height
 
                 self._joint_targets_start = self._joint_targets.copy()
                 self._joint_targets_finish = self._panda.solve_ik(self._end_effector_target)
 
-            if self._wait < self._max_wait:
+                self._wait += 1
+
+            if self._wait < self._max_wait and self._wait > 0:
                 # Lower the gripper
                 self._end_effector_target.pose.pose.position.z = grab_height + (1 - self._wait/(self._max_wait-1)) * (hover_height - grab_height)
 
@@ -317,7 +322,8 @@ class PandaPickAndInsert(Node):
 
                 # Keep waiting
                 self._wait += 1
-            else:
+            
+            if self._wait == self._max_wait:
                 self._wait = 0
 
                 # Pick up the box
@@ -328,14 +334,14 @@ class PandaPickAndInsert(Node):
         if self._state == StateMachineAction.GRAB:
 
             if self._wait == self._max_wait:
-                self._end_effector_target.pose.pose.position.z = hover_height
+                self._end_effector_target.pose.pose.position.z = 2 * hover_height
 
                 self._joint_targets_start = self._joint_targets.copy()
                 self._joint_targets_finish = self._panda.solve_ik(self._end_effector_target)
 
             if self._wait < 2 * self._max_wait and self._wait >= self._max_wait:
                 # Raise the gripper
-                self._end_effector_target.pose.pose.position.z = grab_height + ((self._wait - self._max_wait)/(self._max_wait - 1)) * (hover_height - grab_height)
+                self._end_effector_target.pose.pose.position.z = grab_height + ((self._wait - self._max_wait)/(self._max_wait - 1)) * (2 * hover_height - grab_height)
 
                 self._joint_targets = self.interp_joint_targets(self._joint_targets, self._joint_targets_finish, self._joint_targets_start, self._max_wait)
 
@@ -345,9 +351,9 @@ class PandaPickAndInsert(Node):
                 self._wait = 0
 
                 # Set the location for the delivery target
-                self._end_effector_target.pose.pose.position.x = 0.7 + (((self._sparkplug_counter - 1) % 4) - 2) * 0.0125
+                self._end_effector_target.pose.pose.position.x = 0.25 + (((self._sparkplug_counter - 1) % 4) - 2) * 0.0125
                 self._end_effector_target.pose.pose.position.y = (((self._sparkplug_counter - 1) % 4) - 2) * 0.0125
-                self._end_effector_target.pose.pose.position.z = hover_height
+                self._end_effector_target.pose.pose.position.z = 0.2 + 2 * hover_height
 
                 self._joint_targets = self._panda.solve_ik(self._end_effector_target)
 
@@ -357,11 +363,12 @@ class PandaPickAndInsert(Node):
             return
 
         if self._state == StateMachineAction.DELIVER:
-            goal = 0.085
+            goal = 0.2 + 0.12
             grab_height = goal + 0.25 * sparkplug_height
             hover_height = goal + sparkplug_height
 
             if self._wait == 0 and self.end_effector_reached():
+                # self._end_effector_target.pose.pose.position.x -= 0.014
                 self._end_effector_target.pose.pose.position.z = grab_height
 
                 self._joint_targets_start = self._joint_targets.copy()

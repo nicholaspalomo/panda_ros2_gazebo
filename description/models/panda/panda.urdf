@@ -24,7 +24,7 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/collision/link0.stl"/>
+        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/visual/link0.dae"/>
       </geometry>
     </collision>
   </link>
@@ -46,7 +46,7 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/collision/link1.stl"/>
+        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/visual/link1.dae"/>
       </geometry>
     </collision>
   </link>
@@ -75,7 +75,7 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/collision/link2.stl"/>
+        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/visual/link2.dae"/>
       </geometry>
     </collision>
   </link>
@@ -104,7 +104,7 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/collision/link3.stl"/>
+        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/visual/link3.dae"/>
       </geometry>
     </collision>
   </link>
@@ -133,7 +133,7 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/collision/link4.stl"/>
+        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/visual/link4.dae"/>
       </geometry>
     </collision>
   </link>
@@ -163,7 +163,7 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/collision/link5.stl"/>
+        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/visual/link5.dae"/>
       </geometry>
     </collision>
   </link>
@@ -192,7 +192,7 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/collision/link6.stl"/>
+        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/visual/link6.dae"/>
       </geometry>
     </collision>
   </link>
@@ -221,7 +221,7 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/collision/link7.stl"/>
+        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/visual/link7.dae"/>
       </geometry>
     </collision>
   </link>
@@ -230,7 +230,7 @@
     <parent link="panda_link6"/>
     <child link="panda_link7"/>
     <axis xyz="0 0 1"/>
-    <limit effort="12" lower="-2.8973" upper="2.8973" velocity="2.6100"/>
+    <limit effort="12" lower="-3.15" upper="3.15" velocity="2.6100"/>
   </joint>
   <link name="panda_link8"/>
   <joint name="panda_joint8" type="fixed">
@@ -262,7 +262,7 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/collision/hand.stl"/>
+        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/visual/hand.dae"/>
       </geometry>
     </collision>
   </link>
@@ -284,7 +284,7 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/collision/finger.stl"/>
+        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/visual/finger.dae"/>
       </geometry>
     </collision>
   </link>
@@ -306,7 +306,7 @@
     <collision>
       <origin rpy="0 0 3.14159265359" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/collision/finger.stl"/>
+        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/panda/meshes/visual/finger.dae"/>
       </geometry>
     </collision>
   </link>
