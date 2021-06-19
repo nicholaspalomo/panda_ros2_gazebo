@@ -178,7 +178,7 @@ class PandaFollowTrajectory(Node):
 
         # Sample a new target position...
         self._end_effector_target.header.stamp = self.get_clock().now().to_msg()
-        self._end_effector_target.pose.pose.position.x = 0.4
+        self._end_effector_target.pose.pose.position.x = 0.5
         self._end_effector_target.pose.pose.position.y = 0.2 * np.cos(0.5 * self.get_clock().now().seconds_nanoseconds()[0])
         self._end_effector_target.pose.pose.position.z = 0.2 * np.sin(0.5 * self.get_clock().now().seconds_nanoseconds()[0]) + 0.6
 
