@@ -1,6 +1,6 @@
 from ament_index_python.packages import get_package_share_directory
 import launch
-from launch.substitutions import Command, LaunchConfiguration
+from launch.substitutions import Command, LaunchConfiguration, TextSubstitution
 from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 import launch_ros
@@ -76,7 +76,22 @@ def generate_launch_description():
     gazebo_model_path = SetEnvironmentVariable(name='GAZEBO_MODEL_PATH', value=[default_model_path])
     gazebo_media_path = SetEnvironmentVariable(name='GAZEBO_MEDIA_PATH', value=[default_model_path])
 
-    return launch.LaunchDescription([
+    # TODO: launch_description.add_action(launch description for kinect sensor)
+    kinect_urdf_path = os.path.join(default_model_path, "kinect", "kinect.urdf")
+    spawn_kinect_launch_description = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_share, "kinect.launch.py")),
+        launch_arguments={
+            'robot_urdf': kinect_urdf_path,
+            'x': TextSubstitution(text=str(1.0)),
+            'y': TextSubstitution(text=str(0.0)),
+            'z': TextSubstitution(text=str(0.275)),
+            'robot_name': 'kinect',
+            'robot_namespace': 'kinect'
+            }.items()
+    )
+
+    launch_description = launch.LaunchDescription([
         gazebo_model_path,
         gazebo_media_path,
         launch.actions.DeclareLaunchArgument(
@@ -99,3 +114,7 @@ def generate_launch_description():
         # joint_state_publisher_node,
         # joint_state_publisher_gui_node,
     ])
+
+    launch_description.add_action(spawn_kinect_launch_description)
+
+    return launch_description

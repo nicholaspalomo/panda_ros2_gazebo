@@ -55,6 +55,8 @@ Panda demo in ROS2.""",
         "console_scripts": [
             "panda = \
                 panda_ros2_gazebo.runner:main",
+            "spawn_kinect = \
+                panda_ros2_gazebo.spawn_kinect:main"
         ],
     },
 )
