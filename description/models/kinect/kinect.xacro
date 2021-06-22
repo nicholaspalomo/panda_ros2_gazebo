@@ -1,0 +1,126 @@
+<?xml version="1.0" ?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="kinect">
+  <xacro:property name="x" value="0.0" />
+  <xacro:property name="y" value="0.0" />
+  <xacro:property name="z" value="0.0" />
+  <xacro:property name="R" value="0.0" />
+  <xacro:property name="P" value="0.0" />
+  <xacro:property name="Y" value="0.0" />
+
+  <link name="world"/>
+  <!-- Microsoft Kinect / ASUS Xtion PRO Live for simulation -->
+  <!-- camera_name has to be unique! -->
+  <!-- Use the libgazebo_ros_camera.so plugin since libgazebo_ros_openni_kinect.so appears to have not been ported over to ROS2 yet -->
+  <gazebo reference="camera_depth_frame">
+    <sensor name="camera1" type="depth">
+      <update_rate>30.0</update_rate>
+      <camera name="camera1">
+        <horizontal_fov>1.0471975512</horizontal_fov>
+        <image>
+          <width>640</width>
+          <height>480</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.05</near>
+          <far>8.0</far>
+        </clip>
+      </camera>
+      <plugin filename="libgazebo_ros_camera.so" name="single_kinect_camera_controller">
+        <alwaysOn>true</alwaysOn>
+        <updateRate>10.0</updateRate>
+        <!-- <robotNamespace>kinect</robotNamespace> -->
+        <cameraName>camera1</cameraName>
+        <imageTopicName>/camera/color/image_raw</imageTopicName>
+        <cameraInfoTopicName>/camera/color/camera_info</cameraInfoTopicName>
+        <depthImageTopicName>/camera/depth/image_raw</depthImageTopicName>
+        <depthImageCameraInfoTopicName>/camera/depth/camera_info</depthImageCameraInfoTopicName>
+        <pointCloudTopicName>/camera/depth/points</pointCloudTopicName>
+        <frameName>camera_depth_optical_frame</frameName>
+        <pointCloudCutoff>0.3</pointCloudCutoff>
+        <baseline>0.1</baseline>
+        <hackBaseline>0.1</hackBaseline>
+        <distortionK1>0.0</distortionK1>
+        <distortionK2>0.0</distortionK2>
+        <distortionK3>0.0</distortionK3>
+        <distortionT1>0.0</distortionT1>
+        <distortionT2>0.0</distortionT2>
+      </plugin>
+    </sensor>
+  </gazebo>
+
+  <!-- Parameterised in part by the values in kinect_properties.urdf.xacro -->
+  <joint name="camera_rgb_joint" type="fixed">
+    <origin xyz="${x} ${y} ${z}" rpy="${R} ${P} ${Y}"/>
+    <parent link="world"/>
+    <child link="camera_rgb_frame"/>
+  </joint>
+  <link name="camera_rgb_frame">
+    <inertial>
+      <mass value="0.001"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001"/>
+    </inertial>
+  </link>
+  <joint name="camera_rgb_optical_joint" type="fixed">
+    <origin rpy="-1.57079632679 0 -1.57079632679" xyz="0 0 0"/>
+    <parent link="camera_rgb_frame"/>
+    <child link="camera_rgb_optical_frame"/>
+  </joint>
+  <link name="camera_rgb_optical_frame">
+    <inertial>
+      <mass value="0.001"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001"/>
+    </inertial>
+  </link>
+  <joint name="camera_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="-0.031 -0.0 -0.016"/>
+    <parent link="camera_rgb_frame"/>
+    <child link="camera_link"/>
+  </joint>
+  <link name="camera_link">
+    <visual>
+      <origin rpy="0 0 1.57079632679" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/kinect/meshes/visual/kinect.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+      <geometry>
+        <box size="0.07271 0.27794 0.073"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.001"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001"/>
+    </inertial>
+  </link>
+  <joint name="camera_depth_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0.0 0"/>
+    <parent link="camera_rgb_frame"/>
+    <child link="camera_depth_frame"/>
+  </joint>
+  <link name="camera_depth_frame">
+    <inertial>
+      <mass value="0.001"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001"/>
+    </inertial>
+  </link>
+  <joint name="camera_depth_optical_joint" type="fixed">
+    <origin rpy="-1.57079632679 0 -1.57079632679" xyz="0 0 0"/>
+    <parent link="camera_depth_frame"/>
+    <child link="camera_depth_optical_frame"/>
+  </joint>
+  <link name="camera_depth_optical_frame">
+    <inertial>
+      <mass value="0.001"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001"/>
+    </inertial>
+  </link>
+</robot>
+

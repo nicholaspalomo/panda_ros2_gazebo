@@ -1,6 +1,6 @@
 from ament_index_python.packages import get_package_share_directory
 import launch
-from launch.substitutions import Command, LaunchConfiguration
+from launch.substitutions import Command, LaunchConfiguration, TextSubstitution
 from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 import launch_ros
@@ -8,6 +8,7 @@ import os
 
 def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time', default='false')
+    default_camera_name = LaunchConfiguration('camera_name', default='kinect')
     pkg_share = launch_ros.substitutions.FindPackageShare(package='panda_ros2_gazebo').find('panda_ros2_gazebo')
     default_model_path = os.path.join(pkg_share,
         "description",
@@ -76,7 +77,24 @@ def generate_launch_description():
     gazebo_model_path = SetEnvironmentVariable(name='GAZEBO_MODEL_PATH', value=[default_model_path])
     gazebo_media_path = SetEnvironmentVariable(name='GAZEBO_MEDIA_PATH', value=[default_model_path])
 
-    return launch.LaunchDescription([
+    kinect_urdf_path = os.path.join(default_model_path, "kinect", "kinect.urdf")
+    spawn_kinect_launch_description = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_share, "kinect.launch.py")),
+        launch_arguments={
+            'robot_urdf': kinect_urdf_path,
+            'x': TextSubstitution(text=str(1.5)),
+            'y': TextSubstitution(text=str(0.0)),
+            'z': TextSubstitution(text=str(0.25)),
+            'roll' : TextSubstitution(text=str(0.0)),
+            'pitch' : TextSubstitution(text=str(-0.09817477042)), # -pi/32
+            'yaw' : TextSubstitution(text=str(3.14159265359)), # pi
+            'robot_name': default_camera_name,
+            'robot_namespace': default_camera_name
+            }.items()
+    )
+
+    launch_description = launch.LaunchDescription([
         gazebo_model_path,
         gazebo_media_path,
         launch.actions.DeclareLaunchArgument(
@@ -85,6 +103,8 @@ def generate_launch_description():
             description='Use simulation (Gazebo) clock if true'),
         launch.actions.DeclareLaunchArgument(name='gui', default_value='false',
                                              description='Flag to enable joint_state_publisher_gui'),
+        launch.actions.DeclareLaunchArgument(name='camera_name', default_value='kinect',
+                                             description='Default camera name'),
         launch.actions.DeclareLaunchArgument(name='model', default_value=default_urdf_path,
                                              description='Absolute path to robot urdf file'),
         launch.actions.DeclareLaunchArgument(name='rvizconfig', default_value=default_rviz_config_path,
@@ -99,3 +119,7 @@ def generate_launch_description():
         # joint_state_publisher_node,
         # joint_state_publisher_gui_node,
     ])
+
+    launch_description.add_action(spawn_kinect_launch_description)
+
+    return launch_description
