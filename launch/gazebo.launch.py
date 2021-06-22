@@ -77,7 +77,6 @@ def generate_launch_description():
     gazebo_model_path = SetEnvironmentVariable(name='GAZEBO_MODEL_PATH', value=[default_model_path])
     gazebo_media_path = SetEnvironmentVariable(name='GAZEBO_MEDIA_PATH', value=[default_model_path])
 
-    # TODO: launch_description.add_action(launch description for kinect sensor)
     kinect_urdf_path = os.path.join(default_model_path, "kinect", "kinect.urdf")
     spawn_kinect_launch_description = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
