@@ -87,8 +87,8 @@ def generate_launch_description():
             'y': TextSubstitution(text=str(0.0)),
             'z': TextSubstitution(text=str(0.25)),
             'roll' : TextSubstitution(text=str(0.0)),
-            'pitch' : TextSubstitution(text=str(-0.09817477042)),
-            'yaw' : TextSubstitution(text=str(3.14159265359)),
+            'pitch' : TextSubstitution(text=str(-0.09817477042)), # -pi/32
+            'yaw' : TextSubstitution(text=str(3.14159265359)), # pi
             'robot_name': default_camera_name,
             'robot_namespace': default_camera_name
             }.items()
