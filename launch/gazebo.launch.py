@@ -84,11 +84,11 @@ def generate_launch_description():
             os.path.join(pkg_share, "kinect.launch.py")),
         launch_arguments={
             'robot_urdf': kinect_urdf_path,
-            'x': TextSubstitution(text=str(1.0)),
+            'x': TextSubstitution(text=str(1.5)),
             'y': TextSubstitution(text=str(0.0)),
             'z': TextSubstitution(text=str(0.25)),
             'roll' : TextSubstitution(text=str(0.0)),
-            'pitch' : TextSubstitution(text=str(0.0)),
+            'pitch' : TextSubstitution(text=str(-0.09817477042)),
             'yaw' : TextSubstitution(text=str(3.14159265359)),
             'robot_name': default_camera_name,
             'robot_namespace': default_camera_name
