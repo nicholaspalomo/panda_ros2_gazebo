@@ -3,7 +3,7 @@ from glob import glob
 import os
 from setuptools import setup
 
-package_name = "panda_ros2_gazebo"
+package_name = "panda_control"
 
 # build a list of the data files
 data_files = []
@@ -54,7 +54,7 @@ Panda demo in ROS2.""",
     entry_points={
         "console_scripts": [
             "panda = \
-                panda_ros2_gazebo.runner:main",
+                panda_control.runner:main"
         ],
     },
 )

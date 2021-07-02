@@ -83,7 +83,7 @@
     <visual>
       <origin rpy="0 0 1.57079632679" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find panda_ros2_gazebo)/description/models/kinect/meshes/visual/kinect.dae"/>
+        <mesh filename="file://$(find panda_control)/description/models/kinect/meshes/visual/kinect.dae"/>
       </geometry>
     </visual>
     <collision>

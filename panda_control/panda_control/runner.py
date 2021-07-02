@@ -12,6 +12,7 @@ from .examples.panda_teleop_control import PandaTeleopControl
 from .examples.panda_follow_trajectory import PandaFollowTrajectory
 from .examples.panda_pick_n_place import PandaPickAndPlace
 from .examples.panda_pick_n_insert import PandaPickAndInsert
+from .examples.panda_teleop_control2 import PandaTeleopControl2
 
 def main(args=None):
     rclpy.init(args=args)
@@ -22,6 +23,8 @@ def main(args=None):
         node = PandaPickAndPlace()
     elif "pickninsert" in sys.argv[2]:
         node = PandaPickAndInsert()
+    elif "teleop2" in sys.argv[2]:
+        node = PandaTeleopControl2()
     else:
         node = PandaTeleopControl()
 

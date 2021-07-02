@@ -10,10 +10,11 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 import launch_ros
 import os
 
+# TODO: Cleanup this launch file
 def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time', default='false')
     default_camera_name = LaunchConfiguration('camera_name', default='kinect')
-    pkg_share = launch_ros.substitutions.FindPackageShare(package='panda_ros2_gazebo').find('panda_ros2_gazebo')
+    pkg_share = launch_ros.substitutions.FindPackageShare(package='panda_control').find('panda_control')
     default_model_path = os.path.join(pkg_share,
         "description",
         "models"
@@ -64,7 +65,7 @@ def generate_launch_description():
         output="screen",
     )
     effort_controller_config = os.path.join(
-        get_package_share_directory("panda_ros2_gazebo"), "config", "ros_control.yaml"
+        get_package_share_directory("panda_control"), "config", "ros_control.yaml"
     )
     spawn_controller = launch_ros.actions.Node(
         package="controller_manager",
@@ -124,6 +125,6 @@ def generate_launch_description():
         # joint_state_publisher_gui_node,
     ])
 
-    launch_description.add_action(spawn_kinect_launch_description)
+    # launch_description.add_action(spawn_kinect_launch_description)
 
     return launch_description

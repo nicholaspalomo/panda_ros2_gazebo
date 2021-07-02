@@ -17,7 +17,7 @@ def generate_launch_description():
     LaunchConfiguration('roll', default='0.0'), LaunchConfiguration('pitch', default='0.0'), LaunchConfiguration('yaw', default='3.14159265359')]
     default_namespace = LaunchConfiguration('robot_namespace', default='kinect')
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
-    pkg_share = launch_ros.substitutions.FindPackageShare(package='panda_ros2_gazebo').find('panda_ros2_gazebo')
+    pkg_share = launch_ros.substitutions.FindPackageShare(package='panda_control').find('panda_control')
     sensor_model_path = os.path.join(pkg_share,
         "description",
         "models")
@@ -36,14 +36,6 @@ def generate_launch_description():
         package="gazebo_ros",
         executable="spawn_entity.py",
         arguments=["-topic", "robot_description", "-entity", "kinect", "-x", pose[0], "-y", pose[1], "-z", pose[2], "-R", pose[3], "-P", pose[4], "-Y", pose[5]],
-        output="screen",
-    )
-
-    spawn_joint_state_broadcaster = launch_ros.actions.Node(
-        namespace=default_namespace,
-        package="controller_manager",
-        executable="spawner.py",
-        arguments=["joint_state_broadcaster", "--controller-type", "joint_state_broadcaster/JointStateBroadcaster"],
         output="screen",
     )
 
@@ -94,7 +86,6 @@ def generate_launch_description():
             default_value='3.14159265359',
             description='Initial pose of kinect - yaw'
         ),
-        spawn_joint_state_broadcaster,
         robot_state_publisher_node,
         joint_state_publisher_node,
         spawn_entity

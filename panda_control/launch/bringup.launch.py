@@ -9,14 +9,14 @@ import os
 
 def generate_launch_description():
     name = LaunchConfiguration('name', default='teleop')
-    pkg_share = launch_ros.substitutions.FindPackageShare(package='panda_ros2_gazebo').find('panda_ros2_gazebo')
+    pkg_share = launch_ros.substitutions.FindPackageShare(package='panda_control').find('panda_control')
     parameter_file_path = os.path.join(pkg_share,
         "config",
         "params.yaml"
     )
     
     panda_node = launch_ros.actions.Node(
-        package='panda_ros2_gazebo',
+        package='panda_control',
         executable='panda',
         name='panda',
         parameters=[

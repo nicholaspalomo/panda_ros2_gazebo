@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-    <name>panda_ros2_gazebo</name>
+    <name>panda_control</name>
     <version>1.0.0</version>
     <description>ROS2 control interface for Gazebo</description>
     <maintainer email="npalomo@student.ethz.ch">njpalomo</maintainer>
@@ -9,6 +9,7 @@
 
     <depend>hardware_interface</depend>
     <depend>gazebo_ros2_control</depend>
+    <depend>std_msgs</depend>
 
     <exec_depend>joint_state_publisher_gui</exec_depend>
     <exec_depend>robot_state_publisher</exec_depend>

@@ -53,6 +53,9 @@ class PandaFollowTrajectory(Node):
         self._joint_states_subscriber = self.create_subscription(JointState, '/joint_states', self.callback_joint_states, 10)
         self._control_dt = self.get_parameter('control_dt').value
 
+        print("Setting up the Panda-follow demo...")
+        print("Joint control topic: {}".format(self.get_parameter('joint_control_topic').value))
+
         self._panda = Panda(self)
         self._num_joints = self._panda.num_joints
 
@@ -79,7 +82,7 @@ class PandaFollowTrajectory(Node):
         self._err = np.zeros((self._num_joints,))
         self._int_err = np.zeros((self._num_joints,))
 
-        joint_controller_name = self.get_parameter('joint_controller_name')
+        joint_controller_name = self.get_parameter('joint_controller_name').value
 
         # create a service client to retrieve the PID gains from the joint_group_effort_controller
         self._parameter_getter_client = self.create_client(GetParameters, '/' + joint_controller_name + '/get_parameters')
