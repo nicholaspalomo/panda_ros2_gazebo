@@ -17,16 +17,21 @@ from .examples.panda_teleop_control2 import PandaTeleopControl2
 def main(args=None):
     rclpy.init(args=args)
 
+    if not sys.argv[2]:
+        raise ValueError("[runner.py] Error: Unrecognized arguments passed to node in call to `ros2 launch panda_ros2_gazebo bringup.launch.py mode:=<option>`")
+
     if "follow" in sys.argv[2]:
         node = PandaFollowTrajectory()
     elif "picknplace" in sys.argv[2]:
         node = PandaPickAndPlace()
     elif "pickninsert" in sys.argv[2]:
         node = PandaPickAndInsert()
-    elif "teleop2" in sys.argv[2]:
+    elif "teleop" in sys.argv[2]:
+        node = PandaTeleopControl()
+    elif "cl_setpoint" in sys.argv[2]:
         node = PandaTeleopControl2()
     else:
-        node = PandaTeleopControl()
+        raise ValueError("[runner.py] Error: Unrecognized arguments passed to node in call to `ros2 launch panda_ros2_gazebo bringup.launch.py mode:=<option>`. Valid options for <option> are `follow`, `picknplace`, `pickninsert`, `teleop`, or `cl_setpoint`")
 
     rclpy.spin(node)
 
