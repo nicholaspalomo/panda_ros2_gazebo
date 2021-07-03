@@ -8,7 +8,7 @@ import launch_ros
 import os
 
 def generate_launch_description():
-    name = LaunchConfiguration('name', default='teleop')
+    name = LaunchConfiguration('mode', default='')
     pkg_share = launch_ros.substitutions.FindPackageShare(package='panda_ros2_gazebo').find('panda_ros2_gazebo')
     parameter_file_path = os.path.join(pkg_share,
         "config",
@@ -24,13 +24,13 @@ def generate_launch_description():
             {'share_dir' : pkg_share}
         ],
         output='screen',
-        arguments=['name', name]
+        arguments=['mode', name]
     )
 
     return launch.LaunchDescription([
         launch.actions.DeclareLaunchArgument(
-            'name',
-            default_value='teleop',
-            description='Name of demo to run - follow or teleop'),
+            'mode',
+            default_value='',
+            description='Name of demo to run - see runner.py for options'),
         panda_node
     ])

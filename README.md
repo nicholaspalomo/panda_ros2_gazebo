@@ -51,7 +51,7 @@ This will bring up the Gazebo simulation and the RViz visualization. It will als
 
 To launch the node that will compute the inverse kinematics and publish the setpoints to the joint controllers, open a new terminal and navigate to the root of your colcon workspace. After sourcing your workspace, launch the node with:
 ```
-$ ros2 launch panda_ros2_gazebo bringup.launch.py name:=<demo>
+$ ros2 launch panda_ros2_gazebo bringup.launch.py mode:=<demo>
 ```
 where `<demo>` is the name of the demo you wish to run. Note that at the moment there are three demos available:
 

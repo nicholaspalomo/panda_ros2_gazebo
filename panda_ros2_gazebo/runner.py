@@ -16,14 +16,19 @@ from .examples.panda_pick_n_insert import PandaPickAndInsert
 def main(args=None):
     rclpy.init(args=args)
 
+    if not sys.argv[2]:
+        raise ValueError("[runner.py] Error: Unrecognized arguments passed to node in call to `ros2 launch panda_ros2_gazebo bringup.launch.py mode:=<option>`")
+
     if "follow" in sys.argv[2]:
         node = PandaFollowTrajectory()
     elif "picknplace" in sys.argv[2]:
         node = PandaPickAndPlace()
     elif "pickninsert" in sys.argv[2]:
         node = PandaPickAndInsert()
-    else:
+    elif "teleop" in sys.argv[2]:
         node = PandaTeleopControl()
+    else:
+        raise ValueError("[runner.py] Error: Unrecognized arguments passed to node in call to `ros2 launch panda_ros2_gazebo bringup.launch.py mode:=<option>`. Valid options for <option> are `follow`, `picknplace`, `pickninsert`, or `teleop`")
 
     rclpy.spin(node)
 
