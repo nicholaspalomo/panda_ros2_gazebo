@@ -143,11 +143,23 @@ class PandaTeleopControl2(Node):
             
             self._joint_states_publisher.publish(joint_states_msg)
 
+        # self.get_logger().info("[SIMULATION] RETURNING TO HOME...")
+
+        # # Return to home
+        # joint_states_msg.header.stamp = self.get_clock().now().to_msg()
+        # joint_states_msg.header.frame_id = self._panda.base_frame
+        # joint_states_msg.name = self._panda.joint_names
+        # joint_states_msg.position = list(self._panda.reset_model())
+        # joint_states_msg.velocity = [0.] * self._panda.num_joints
+        # joint_states_msg.effort = [0.] * self._panda.num_joints
+        
+        # self._joint_states_publisher.publish(joint_states_msg)
+
         return response
 
     def callback_joint_states(self, joint_states: JointState):
 
-        # self._current_joint_positions = np.array(joint_states.position)
+        self._current_joint_positions = np.array(joint_states.position)
         self._panda.set_joint_states(joint_states)
 
     def actuate_gripper(self, request: Empty.Request, response: Empty.Response):

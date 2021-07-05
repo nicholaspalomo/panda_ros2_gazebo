@@ -270,7 +270,7 @@ class Panda():
     def reset_model(self) -> np.ndarray:
 
         self._node_handle.get_logger().info('RESETTING THE JOINT ANGLES...')
-        self._node_handle.get_logger().info('INITIAL JOIN ANGLES:\n{}'.format(self._initial_joint_position_targets))
+        self._node_handle.get_logger().info('INITIAL JOINT ANGLES:\n{}'.format(self._initial_joint_position_targets))
         self._joint_states.position = self._initial_joint_position_targets
 
         return self._initial_joint_position_targets
