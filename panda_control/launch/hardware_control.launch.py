@@ -62,7 +62,7 @@ def generate_launch_description():
             {'share_dir' : pkg_share}
         ],
         output='screen',
-        arguments=['name', 'teleop2']
+        arguments=['mode', 'cl_setpoint']
     )
 
     return launch.LaunchDescription([
@@ -75,8 +75,8 @@ def generate_launch_description():
         launch.actions.DeclareLaunchArgument(name='rvizconfig', default_value=default_rviz_config_path,
             description='Absolute path to rviz config file'),
         rviz_node,
-        # robot_state_publisher_node,
-        spawn_joint_group_position_controller,
-        spawn_joint_trajectory_controller,
+        robot_state_publisher_node,
+        # spawn_joint_group_position_controller,
+        # spawn_joint_trajectory_controller,
         panda_control_node
     ])

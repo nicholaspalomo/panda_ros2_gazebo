@@ -8,9 +8,12 @@
 # TODO: Define a custom service that takes end effector target (odometry) as request and returns response containing joint position trajectory
 # TODO: Show the trajectory in RViz repeating in a loop
 
+# TODO: This node should publish a tf2_msgs/TFMessage to the /tf topic for RViz to subscribe to
+
 # ROS2 Python API libraries
 import rclpy
 from rclpy.node import Node
+from rclpy.timer import Timer
 
 # Service files for the planned trajectory
 from std_srvs.srv import Empty
@@ -20,6 +23,7 @@ from nav_msgs.msg import Odometry, Path
 from panda_msgs.srv import GetJointTrajectory
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from std_msgs.msg import Float64MultiArray, Header
+from tf2_msgs.msg import TFMessage
 
 # Panda kinematic model
 from .scripts.models.panda import Panda, FingersAction
@@ -53,12 +57,12 @@ class PandaTeleopControl2(Node):
                 ('share_dir', None)
             ]
         )
-        self._control_dt: np.float64 = self.get_parameter('control_dt').value
+        self._control_dt: np.float64 = 1. / self.get_parameter('control_dt').value
         self._max_joint_speed: np.float64 = self.get_parameter('max_joint_speed').value
 
         print("THE MAXIMUM JOINT SPEED IS: {}".format(self.get_parameter('max_joint_speed').value))
 
-        self._set_ee_target_srv = self.create_service(GetJointTrajectory, 'set_ee_target', self.get_joint_targets_plan)
+        self._set_ee_target_srv = self.create_service(GetJointTrajectory, 'set_ee_target', self.get_joint_targets_plan) # Example call: `ros2 service call /set_ee_target panda_msgs/srv/GetJointTrajectory "{x: 0.5, y: 0.5, z: 0.5, roll: 0.0, pitch: 0.0, yaw: 0.0}"`
         self._go_to_target_real_world_srv = self.create_service(Empty, '/go2target/robot', self.go_to_target_real_world)
         self._go_to_target_sim_srv = self.create_service(Empty, '/go2target/sim', self.go_to_target_sim)
         self._actuate_gripper_srv = self.create_service(Empty, 'actuate_gripper', self.actuate_gripper)
@@ -95,7 +99,18 @@ class PandaTeleopControl2(Node):
         self._rviz_trajectory_pub = self.create_publisher(Path, '/rviz/end_effector_target_trajectory', 10)
         self._joint_control_pub = self.create_publisher(Float64MultiArray, self.get_parameter('joint_control_topic').value, 10)
 
-    
+        self._robot_state_callback_timer: Timer = self.create_timer(self._control_dt, self.robot_state_timer_callback)
+
+    def robot_state_timer_callback(self):
+
+        joint_states_msg: JointState = JointState()
+        joint_states_msg.header.stamp = self.get_clock().now().to_msg()
+        joint_states_msg.header.frame_id = self._panda.base_frame
+        joint_states_msg.name = self._panda.joint_names
+        joint_states_msg.position = list(self._current_joint_positions)
+        joint_states_msg.velocity = [0.] * self._panda.num_joints
+        joint_states_msg.effort = [0.] * self._panda.num_joints
+        self._joint_states_publisher.publish(joint_states_msg)
 
     def go_to_target_real_world(self, request: Empty.Request, response: Empty.Response):
 
@@ -114,24 +129,15 @@ class PandaTeleopControl2(Node):
         self._idyn_joint_trajectory_pub.publish(self._current_target_joint_trajectory)
         self._idyn_joint_group_position_controller_pub.publish(self._current_target_joint_setpoint)
 
-        # RViz marker looks for a nav_msgs/path. So we need to evaluate the forward kinematics at each point along the trajectory
-        path = Path()
-        for point in self._current_target_joint_trajectory.points:
-            pose_stamped: PoseStamped = PoseStamped()
-            end_effector_pose: Odometry = self._panda.solve_fk(JointState(position=point, velocity=([0.] * self._panda.num_joints)))
-            pose_stamped.header = end_effector_pose.header
-            pose_stamped.pose = end_effector_pose.pose.pose
-            path.append(pose_stamped)
-
-        self._rviz_trajectory_pub.publish(path)
-
         # Visualize the trajectory
         for point in self._current_target_joint_trajectory.points:
+            self._current_joint_positions = point.positions
+
             joint_states_msg: JointState = JointState()
             joint_states_msg.header.stamp = self.get_clock().now().to_msg()
             joint_states_msg.header.frame_id = self._panda.base_frame
             joint_states_msg.name = self._panda.joint_names
-            joint_states_msg.position = list(self._current_joint_positions)
+            joint_states_msg.position = list(point.positions)
             joint_states_msg.velocity = [0.] * self._panda.num_joints
             joint_states_msg.effort = [0.] * self._panda.num_joints
             
@@ -141,7 +147,8 @@ class PandaTeleopControl2(Node):
 
     def callback_joint_states(self, joint_states: JointState):
 
-        self._current_joint_positions = np.array(joint_states.position)
+        # self._current_joint_positions = np.array(joint_states.position)
+        self._panda.set_joint_states(joint_states)
 
     def actuate_gripper(self, request: Empty.Request, response: Empty.Response):
 
@@ -159,26 +166,39 @@ class PandaTeleopControl2(Node):
 
         # Use IK to get the desired joint positions at the target end effector pose
         end_effector_target: Odometry = Odometry()
-        end_effector_target.pose.position.x = request.x
-        end_effector_target.pose.position.y = request.y
-        end_effector_target.pose.position.z = request.z
-        end_effector_target.pose.orientation = rpy2quat([request.roll, request.pitch, request.yaw], input_in_degrees=True)
-
+        end_effector_target.pose.pose.position.x = request.x
+        end_effector_target.pose.pose.position.y = request.y
+        end_effector_target.pose.pose.position.z = request.z
+        end_effector_target_quat_xyzw = rpy2quat([request.roll, request.pitch, request.yaw], input_in_degrees=True)
+        end_effector_target.pose.pose.orientation.w = end_effector_target_quat_xyzw.w
+        end_effector_target.pose.pose.orientation.x = end_effector_target_quat_xyzw.x
+        end_effector_target.pose.pose.orientation.y = end_effector_target_quat_xyzw.y
+        end_effector_target.pose.pose.orientation.z = end_effector_target_quat_xyzw.z
+        
         target_joint_positions: np.ndarray = self._panda.solve_ik(end_effector_target)
 
         # Maximum joint position error should determine how long it takes to reach the target orientation
         max_joint_position_err = np.max(np.abs(self._current_joint_positions[:-2] - target_joint_positions[:-2]))
         actuation_time = max_joint_position_err / self._max_joint_speed
 
+        self.get_logger().info("ACTUATION TIME: {}".format(actuation_time))
+
         # Calculate the number of points in the joint trajectory (separated by control_dt)
-        num_trajectory_steps = actuation_time // self._control_dt
+        num_trajectory_steps = np.floor(actuation_time / self._control_dt).astype(np.int) + 1
+
+        self.get_logger().info("NUMBER OF TRAJECTORY STEPS: {}".format(num_trajectory_steps))
+
+        # RViz marker looks for a nav_msgs/path. So we need to evaluate the forward kinematics at each point along the trajectory
+        path = Path()
+        path.header.stamp = self.get_clock().now().to_msg()
+        path.header.frame_id = self._panda.base_frame
 
         # Form the trajectory message
         self._current_target_joint_trajectory = JointTrajectory()
         targets = list(self._current_joint_positions).copy()
         for i in range(num_trajectory_steps):
             self._joint_trajectory_point.positions = targets
-            self._joint_trajectory_point.duration = rclpy.Duration(i * self._control_dt)
+            self._joint_trajectory_point.time_from_start = rclpy.time.Duration(seconds=(np.float_(i+1) * self._control_dt), nanoseconds=0.0).to_msg()
 
             # Linearly interpolate the joint position targets along the trajectory
             targets = self._interp_joint_targets(
@@ -189,11 +209,22 @@ class PandaTeleopControl2(Node):
 
             self._current_target_joint_trajectory.points.append(copy.deepcopy(self._joint_trajectory_point))
 
+            # For visualization of EE path in RViz
+            pose_stamped: PoseStamped = PoseStamped()
+            end_effector_pose: Odometry = self._panda.solve_fk(JointState(position=list(self._current_target_joint_trajectory.points[-1].positions), velocity=([0.] * self._panda.num_joints), effort=([0.] * self._panda.num_joints)), remap=False)
+            pose_stamped.header = end_effector_pose.header
+            pose_stamped.pose = end_effector_pose.pose.pose
+            path.poses.append(pose_stamped)
+
         # Populate the remaining fields of the response
         self._current_target_joint_trajectory.header = Header(stamp=self.get_clock().now().to_msg(), frame_id=self._panda.base_frame)
         self._current_target_joint_trajectory.joint_names = self._panda.joint_names
 
-        self._current_target_joint_setpoint.data = self._current_target_joint_trajectory.points[-1]
+        self.get_logger().info("LAST TRAJECTORY POINT: {}".format(self._current_target_joint_trajectory.points[-1]))
+
+        self._current_target_joint_setpoint.data = self._current_target_joint_trajectory.points[-1].positions
+
+        self._rviz_trajectory_pub.publish(path)
 
         self._seq += 1
 
