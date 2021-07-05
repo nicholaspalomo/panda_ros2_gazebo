@@ -97,6 +97,7 @@ class PandaTeleopControl2(Node):
         self._idyn_joint_trajectory_pub = self.create_publisher(JointTrajectory, 'idyn/' + self.get_parameter('joint_trajectory_topic').value, 10)
         self._idyn_joint_group_position_controller_pub = self.create_publisher(Float64MultiArray, 'idyn/' + self.get_parameter('joint_control_topic').value, 10)
         self._rviz_trajectory_pub = self.create_publisher(Path, '/rviz/end_effector_target_trajectory', 10)
+        self._rviz_ee_target_pose_pub = self.create_publisher(Odometry, '/rviz/end_effector_target_pose', 10)
         self._joint_control_pub = self.create_publisher(Float64MultiArray, self.get_parameter('joint_control_topic').value, 10)
 
         self._robot_state_callback_timer: Timer = self.create_timer(self._control_dt, self.robot_state_timer_callback)
@@ -237,6 +238,9 @@ class PandaTeleopControl2(Node):
         self._current_target_joint_setpoint.data = self._current_target_joint_trajectory.points[-1].positions
 
         self._rviz_trajectory_pub.publish(path)
+
+        end_effector_target.header = path.header
+        self._rviz_ee_target_pose_pub.publish(end_effector_target)
 
         self._seq += 1
 
