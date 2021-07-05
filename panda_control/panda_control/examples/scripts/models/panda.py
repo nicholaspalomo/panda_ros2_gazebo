@@ -19,12 +19,15 @@ from ..rbd.idyntree import kindyncomputations
 from ..rbd.idyntree.helpers import FrameVelocityRepresentation
 
 # ROS2 message and service data structures
-from geometry_msgs.msg import Transform, Vector3, Quaternion, PoseWithCovariance, TwistWithCovariance, Pose, Twist
+from geometry_msgs.msg import Transform, Vector3, Quaternion, PoseWithCovariance, TwistWithCovariance, Pose, Twist, TransformStamped
 from sensor_msgs.msg import JointState
 from nav_msgs.msg import Odometry
 from gazebo_msgs.msg import EntityState
 from gazebo_msgs.srv import SetEntityState
 from std_srvs.srv import Empty
+from tf2_msgs.msg import TFMessage
+
+from rclpy.node import Node
 
 class FingersAction(enum.Enum):
 
@@ -39,7 +42,7 @@ class Panda():
                  orientation: List[float] = (0, 0, 0, 1.0),
                  model_file: str = None):
 
-        self._node_handle = node_handle
+        self._node_handle: Node = node_handle
 
         # Initial pose
         initial_pose = Transform()
@@ -268,6 +271,7 @@ class Panda():
 
         self._node_handle.get_logger().info('RESETTING THE JOINT ANGLES...')
         self._node_handle.get_logger().info('INITIAL JOIN ANGLES:\n{}'.format(self._initial_joint_position_targets))
+        self._joint_states.position = self._initial_joint_position_targets
 
         return self._initial_joint_position_targets
 
@@ -284,6 +288,45 @@ class Panda():
         self._gripper_state = action
 
         return joint_positions.copy()
+    
+    @property
+    def tf(self) -> TFMessage:
+        tf_message: TFMessage = TFMessage()
+        frame_index: int = 0
+        tf_list = []
+        while self._articulated_system.isValidFrameIndex(frame_index+1):
+            tf_stamped: TransformStamped = TransformStamped()
+            tf_stamped.header.stamp = self._node_handle.get_clock().now().to_msg()
+
+            frame_id = self._articulated_system.getFrameName(frame_index)
+            child_frame_id = self._articulated_system.getFrameName(frame_index+1)
+
+            tf_stamped.header.frame_id = frame_id
+            tf_stamped.child_frame_id = child_frame_id
+
+            tf_parent_2_child_frame = self._fk.getRelativeTransform(frame_id, child_frame_id)
+            position_parent_2_child_frame = tf_parent_2_child_frame.getPosition().toNumPy()
+            rotation_parent_2_child_frame = tf_parent_2_child_frame.getRotation().toNumPy()
+
+            quat = R.from_matrix(rotation_parent_2_child_frame).as_quat()
+
+            transform: Transform = Transform()
+            transform.translation.x = position_parent_2_child_frame[0]
+            transform.translation.y = position_parent_2_child_frame[1]
+            transform.translation.z = position_parent_2_child_frame[2]
+            transform.rotation.x = quat[0]
+            transform.rotation.y = quat[1]
+            transform.rotation.z = quat[2]
+            transform.rotation.w = quat[3]
+            tf_stamped.transform = transform
+
+            tf_list.append(tf_stamped)
+
+            frame_index += 1
+
+        tf_message.transforms = tf_list
+
+        return tf_message
 
     @property
     def num_joints(self) -> int:
