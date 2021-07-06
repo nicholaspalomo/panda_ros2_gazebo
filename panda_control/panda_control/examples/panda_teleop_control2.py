@@ -228,7 +228,8 @@ class PandaTeleopControl2(Node):
         
         # Update the joint positions
         self._current_joint_positions = np.array(joint_states.position)
-        self._rviz_helper.publish(self._panda.solve_fk(joint_states, remap=False))
+        self._panda.set_joint_states(joint_states)
+        # self._rviz_helper.publish(self._panda.solve_fk(joint_states, remap=False))
 
     def actuate_gripper(self, request: Empty.Request, response: Empty.Response):
 
