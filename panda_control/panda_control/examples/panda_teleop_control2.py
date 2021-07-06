@@ -197,6 +197,10 @@ class PandaTeleopControl2(Node):
         # Publish markers in RViz for trajectory and for final pose
         self._publish_to_rviz(path, end_effector_target)
 
+        # Publish the final joint target and the joint trajectory
+        self._idyn_joint_trajectory_pub.publish(self._current_target_joint_trajectory)
+        self._idyn_joint_group_position_controller_pub.publish(self._current_target_joint_setpoint)
+
         return response
 
     def go_to_target_real_world(self, request: Empty.Request, response: Empty.Response):
