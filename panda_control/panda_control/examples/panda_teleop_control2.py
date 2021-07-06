@@ -23,6 +23,9 @@ from std_msgs.msg import Float64MultiArray, Header
 from .scripts.models.panda import Panda, FingersAction
 from .helpers.helpers import rpy2quat
 
+# For displaying end effector path in RViz
+from .helpers.rviz_helper import RVizHelper
+
 # Misc
 import copy
 from typing import List
@@ -99,6 +102,7 @@ class PandaTeleopControl2(Node):
         # Publishers for RViz markers
         self._rviz_trajectory_pub: Publisher = self.create_publisher(Path, '/rviz/end_effector_target_trajectory', 10)
         self._rviz_ee_target_pose_pub: Publisher = self.create_publisher(Odometry, '/rviz/end_effector_target_pose', 10)
+        self._rviz_helper = RVizHelper(self)
 
         # Publisher for the end effector target
         self._joint_control_pub: Publisher = self.create_publisher(Float64MultiArray, self.get_parameter('joint_control_topic').value, 10)
@@ -197,20 +201,12 @@ class PandaTeleopControl2(Node):
 
     def go_to_target_real_world(self, request: Empty.Request, response: Empty.Response):
 
-        # Publish the final joint target and the joint trajectory
-        self._idyn_joint_trajectory_pub.publish(self._current_target_joint_trajectory)
-        self._idyn_joint_group_position_controller_pub.publish(self._current_target_joint_setpoint)
-
         # Publish the final trajectory point to the control topic
         self._joint_control_pub.publish(self._current_target_joint_setpoint)
 
         return response
 
     def go_to_target_sim(self, request: Empty.Request, response: Empty.Response):
-
-        # Publish the final joint target and the joint trajectory
-        self._idyn_joint_trajectory_pub.publish(self._current_target_joint_trajectory)
-        self._idyn_joint_group_position_controller_pub.publish(self._current_target_joint_setpoint)
 
         # Visualize the trajectory
         for point in self._current_target_joint_trajectory.points:
@@ -232,7 +228,7 @@ class PandaTeleopControl2(Node):
         
         # Update the joint positions
         self._current_joint_positions = np.array(joint_states.position)
-        self._panda.set_joint_states(joint_states)
+        self._rviz_helper.publish(self._panda.solve_fk(joint_states, remap=False))
 
     def actuate_gripper(self, request: Empty.Request, response: Empty.Response):
 
@@ -271,5 +267,9 @@ class PandaTeleopControl2(Node):
 
         # Publish markers for the path and for the end effector target pose in RViz
         self._publish_to_rviz(path, end_effector_target)
+
+        # Publish the final joint target and the joint trajectory
+        self._idyn_joint_trajectory_pub.publish(self._current_target_joint_trajectory)
+        self._idyn_joint_group_position_controller_pub.publish(self._current_target_joint_setpoint)
 
         return response
