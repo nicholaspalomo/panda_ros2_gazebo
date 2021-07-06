@@ -125,6 +125,6 @@ def generate_launch_description():
         # joint_state_publisher_gui_node,
     ])
 
-    # launch_description.add_action(spawn_kinect_launch_description)
+    launch_description.add_action(spawn_kinect_launch_description)
 
     return launch_description
