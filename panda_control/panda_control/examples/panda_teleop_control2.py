@@ -2,20 +2,15 @@
 # This software may be modified and distributed under the terms of the
 # GNU Lesser General Public License v2.1 or any later version.
 
-# TODO: Interpolate the joint positions while also clamping
-# TODO: Switch to using a joint position interface
-# TODO: Make sure to load the params yaml when this node is launched
-# TODO: Define a custom service that takes end effector target (odometry) as request and returns response containing joint position trajectory
-# TODO: Show the trajectory in RViz repeating in a loop
-
-# TODO: This node should publish a tf2_msgs/TFMessage to the /tf topic for RViz to subscribe to
-
 # ROS2 Python API libraries
 import rclpy
 from rclpy.node import Node
 from rclpy.timer import Timer
+from rclpy.publisher import Publisher
+from rclpy.subscription import Subscription
+from rclpy.service import Service
 
-# Service files for the planned trajectory
+# Service headers
 from std_srvs.srv import Empty
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import JointState
@@ -23,7 +18,6 @@ from nav_msgs.msg import Odometry, Path
 from panda_msgs.srv import GetJointTrajectory
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from std_msgs.msg import Float64MultiArray, Header
-from tf2_msgs.msg import TFMessage
 
 # Panda kinematic model
 from .scripts.models.panda import Panda, FingersAction
@@ -33,6 +27,8 @@ from .helpers.helpers import rpy2quat
 import copy
 from typing import List
 import numpy as np
+
+# NOTE - Activating controller will result in it publishing to joint_states
 
 class PandaTeleopControl2(Node):
     def __init__(self):
@@ -57,15 +53,20 @@ class PandaTeleopControl2(Node):
                 ('share_dir', None)
             ]
         )
-        self._control_dt: np.float64 = 1. / self.get_parameter('control_dt').value
+        self._control_dt: np.float64 = self.get_parameter('control_dt').value
         self._max_joint_speed: np.float64 = self.get_parameter('max_joint_speed').value
 
         print("THE MAXIMUM JOINT SPEED IS: {}".format(self.get_parameter('max_joint_speed').value))
 
-        self._set_ee_target_srv = self.create_service(GetJointTrajectory, 'set_ee_target', self.get_joint_targets_plan) # Example call: `ros2 service call /set_ee_target panda_msgs/srv/GetJointTrajectory "{x: 0.5, y: 0.5, z: 0.5, roll: 0.0, pitch: 0.0, yaw: 0.0}"`
-        self._go_to_target_real_world_srv = self.create_service(Empty, '/go2target/robot', self.go_to_target_real_world)
-        self._go_to_target_sim_srv = self.create_service(Empty, '/go2target/sim', self.go_to_target_sim)
-        self._actuate_gripper_srv = self.create_service(Empty, 'actuate_gripper', self.actuate_gripper)
+        self._set_ee_target_srv: Service = self.create_service(GetJointTrajectory, 'set_ee_target', self.get_joint_targets_plan) # Example call: `ros2 service call /set_ee_target panda_msgs/srv/GetJointTrajectory "{x: 0.5, y: 0.5, z: 0.5, roll: 0.0, pitch: 90.0, yaw: 0.0}"`
+        self._actuate_gripper_srv: Service = self.create_service(Empty, 'actuate_gripper', self.actuate_gripper)
+        self._go_to_home_srv: Service = self.create_service(Empty, '/go2home', self.go_to_home)
+
+        # Create service clients for simulation...
+        self._go_to_target_sim_srv: Service = self.create_service(Empty, '/go2target/sim', self.go_to_target_sim)
+
+        # ...and for real world control
+        self._go_to_target_real_world_srv: Service = self.create_service(Empty, '/go2target/robot', self.go_to_target_real_world)
 
         # Create a Panda model object (for getting the IK)
         self._panda = Panda(self)
@@ -73,124 +74,44 @@ class PandaTeleopControl2(Node):
         self._joint_trajectory_point: JointTrajectoryPoint = JointTrajectoryPoint()
         self._current_target_joint_trajectory: JointTrajectory = JointTrajectory()
         self._current_target_joint_setpoint: Float64MultiArray = Float64MultiArray()
-        self._seq: int = 0
 
         #  Subscribe to the joint states
-        self._joint_states_subscriber = self.create_subscription(JointState, '/joint_states', self.callback_joint_states, 10)
+        self._joint_states_subscriber: Subscription = self.create_subscription(JointState, '/joint_states', self.callback_joint_states, 10)
 
         # Also create a joint states publisher so that we can update the RViz visualization
-        self._joint_states_publisher = self.create_publisher(JointState, '/joint_states', 10)
+        self._joint_states_publisher: Publisher = self.create_publisher(JointState, '/joint_states', 10)
+
         # Publish the initial joint states
-
-        # DEBUG:
-        print("INITIAL JOINT ANGLES: {}".format(list(self._current_joint_positions)))
-
         initial_joint_states_msg: JointState = JointState()
         initial_joint_states_msg.header.stamp = self.get_clock().now().to_msg()
         initial_joint_states_msg.header.frame_id = self._panda.base_frame
         initial_joint_states_msg.name = self._panda.joint_names
-        initial_joint_states_msg.position = list(self._current_joint_positions)
         initial_joint_states_msg.velocity = [0.] * self._panda.num_joints
         initial_joint_states_msg.effort = [0.] * self._panda.num_joints
+        initial_joint_states_msg.position = self._panda.move_fingers(list(self._current_joint_positions), FingersAction.OPEN)
         self._joint_states_publisher.publish(initial_joint_states_msg)
 
-        self._idyn_joint_trajectory_pub = self.create_publisher(JointTrajectory, 'idyn/' + self.get_parameter('joint_trajectory_topic').value, 10)
-        self._idyn_joint_group_position_controller_pub = self.create_publisher(Float64MultiArray, 'idyn/' + self.get_parameter('joint_control_topic').value, 10)
-        self._rviz_trajectory_pub = self.create_publisher(Path, '/rviz/end_effector_target_trajectory', 10)
-        self._rviz_ee_target_pose_pub = self.create_publisher(Odometry, '/rviz/end_effector_target_pose', 10)
-        self._joint_control_pub = self.create_publisher(Float64MultiArray, self.get_parameter('joint_control_topic').value, 10)
+        # Create control topic namespaced under `idyn/`
+        self._idyn_joint_trajectory_pub: Publisher = self.create_publisher(JointTrajectory, 'idyn/' + self.get_parameter('joint_trajectory_topic').value, 10)
+        self._idyn_joint_group_position_controller_pub: Publisher = self.create_publisher(Float64MultiArray, 'idyn/' + self.get_parameter('joint_control_topic').value, 10)
 
+        # Publishers for RViz markers
+        self._rviz_trajectory_pub: Publisher = self.create_publisher(Path, '/rviz/end_effector_target_trajectory', 10)
+        self._rviz_ee_target_pose_pub: Publisher = self.create_publisher(Odometry, '/rviz/end_effector_target_pose', 10)
+
+        # Publisher for the end effector target
+        self._joint_control_pub: Publisher = self.create_publisher(Float64MultiArray, self.get_parameter('joint_control_topic').value, 10)
+
+        # Timer for publishing to /joint_states topic
         self._robot_state_callback_timer: Timer = self.create_timer(self._control_dt, self.robot_state_timer_callback)
-
-    def robot_state_timer_callback(self):
-
-        joint_states_msg: JointState = JointState()
-        joint_states_msg.header.stamp = self.get_clock().now().to_msg()
-        joint_states_msg.header.frame_id = self._panda.base_frame
-        joint_states_msg.name = self._panda.joint_names
-        joint_states_msg.position = list(self._current_joint_positions)
-        joint_states_msg.velocity = [0.] * self._panda.num_joints
-        joint_states_msg.effort = [0.] * self._panda.num_joints
-        self._joint_states_publisher.publish(joint_states_msg)
-
-    def go_to_target_real_world(self, request: Empty.Request, response: Empty.Response):
-
-        # Publish the final joint target and the joint trajectory
-        self._idyn_joint_trajectory_pub.publish(self._current_target_joint_trajectory)
-        self._idyn_joint_group_position_controller_pub.publish(self._current_target_joint_setpoint)
-
-        # publish to the joint position topic
-        self._joint_control_pub.publish(self._current_target_joint_setpoint)
-
-        return response
-
-    def go_to_target_sim(self, request: Empty.Request, response: Empty.Response):
-
-        # Publish the final joint target and the joint trajectory
-        self._idyn_joint_trajectory_pub.publish(self._current_target_joint_trajectory)
-        self._idyn_joint_group_position_controller_pub.publish(self._current_target_joint_setpoint)
-
-        # Visualize the trajectory
-        for point in self._current_target_joint_trajectory.points:
-            self._current_joint_positions = point.positions
-
-            joint_states_msg: JointState = JointState()
-            joint_states_msg.header.stamp = self.get_clock().now().to_msg()
-            joint_states_msg.header.frame_id = self._panda.base_frame
-            joint_states_msg.name = self._panda.joint_names
-            joint_states_msg.position = list(point.positions)
-            joint_states_msg.velocity = [0.] * self._panda.num_joints
-            joint_states_msg.effort = [0.] * self._panda.num_joints
-            
-            self._joint_states_publisher.publish(joint_states_msg)
-
-        # self.get_logger().info("[SIMULATION] RETURNING TO HOME...")
-
-        # # Return to home
-        # joint_states_msg.header.stamp = self.get_clock().now().to_msg()
-        # joint_states_msg.header.frame_id = self._panda.base_frame
-        # joint_states_msg.name = self._panda.joint_names
-        # joint_states_msg.position = list(self._panda.reset_model())
-        # joint_states_msg.velocity = [0.] * self._panda.num_joints
-        # joint_states_msg.effort = [0.] * self._panda.num_joints
-        
-        # self._joint_states_publisher.publish(joint_states_msg)
-
-        return response
-
-    def callback_joint_states(self, joint_states: JointState):
-
-        self._current_joint_positions = np.array(joint_states.position)
-        self._panda.set_joint_states(joint_states)
-
-    def actuate_gripper(self, request: Empty.Request, response: Empty.Response):
-
-        # actuate the fingers - if OPEN, CLOSE them; otherwise OPEN them
-        if self._panda.gripper_state == FingersAction.OPEN:
-            self._current_target_joint_setpoint.data = self._panda.move_fingers(self._current_target_joint_setpoint.data, FingersAction.CLOSE)
-        else:
-            self._current_target_joint_setpoint.data = self._panda.move_fingers(self._current_target_joint_setpoint.data, FingersAction.OPEN)
 
     def _interp_joint_targets(self, current_joint_targets: List[float], joint_targets_goal: List[float], joint_targets_start: List[float], num_steps: int):
 
         return [jt + (jf - js) / (num_steps - 1) for jt, jf, js in zip(current_joint_targets, joint_targets_goal, joint_targets_start)].copy()
 
-    def get_joint_targets_plan(self, request: GetJointTrajectory.Request, response: GetJointTrajectory.Response):
+    def _make_trajectory(self, target_joint_positions: np.ndarray) -> Path():
 
-        # Use IK to get the desired joint positions at the target end effector pose
-        end_effector_target: Odometry = Odometry()
-        end_effector_target.pose.pose.position.x = request.x
-        end_effector_target.pose.pose.position.y = request.y
-        end_effector_target.pose.pose.position.z = request.z
-        end_effector_target_quat_xyzw = rpy2quat([request.roll, request.pitch, request.yaw], input_in_degrees=True)
-        end_effector_target.pose.pose.orientation.w = end_effector_target_quat_xyzw.w
-        end_effector_target.pose.pose.orientation.x = end_effector_target_quat_xyzw.x
-        end_effector_target.pose.pose.orientation.y = end_effector_target_quat_xyzw.y
-        end_effector_target.pose.pose.orientation.z = end_effector_target_quat_xyzw.z
-        
-        target_joint_positions: np.ndarray = self._panda.solve_ik(end_effector_target)
-
-        # Maximum joint position error should determine how long it takes to reach the target orientation
+        # Maximum joint position error + maximum joint speed determines how long it takes to reach the target orientation
         max_joint_position_err = np.max(np.abs(self._current_joint_positions[:-2] - target_joint_positions[:-2]))
         actuation_time = max_joint_position_err / self._max_joint_speed
 
@@ -229,9 +150,13 @@ class PandaTeleopControl2(Node):
             pose_stamped.pose = end_effector_pose.pose.pose
             path.poses.append(pose_stamped)
 
-        # Populate the remaining fields of the response
+        # Populate the remaining fields of the JointTrajectory message
         self._current_target_joint_trajectory.header = Header(stamp=self.get_clock().now().to_msg(), frame_id=self._panda.base_frame)
         self._current_target_joint_trajectory.joint_names = self._panda.joint_names
+
+        return path
+
+    def _publish_to_rviz(self, path: Path, end_effector_target: Odometry):
 
         self.get_logger().info("LAST TRAJECTORY POINT: {}".format(self._current_target_joint_trajectory.points[-1]))
 
@@ -242,6 +167,99 @@ class PandaTeleopControl2(Node):
         end_effector_target.header = path.header
         self._rviz_ee_target_pose_pub.publish(end_effector_target)
 
-        self._seq += 1
+    def robot_state_timer_callback(self):
+        
+        # Publish the current joint states of the robot
+        joint_states_msg: JointState = JointState()
+        joint_states_msg.header.stamp = self.get_clock().now().to_msg()
+        joint_states_msg.header.frame_id = self._panda.base_frame
+        joint_states_msg.name = self._panda.joint_names
+        joint_states_msg.position = list(self._current_joint_positions)
+        joint_states_msg.velocity = [0.] * self._panda.num_joints
+        joint_states_msg.effort = [0.] * self._panda.num_joints
+        self._joint_states_publisher.publish(joint_states_msg)
+
+    def go_to_home(self, request: Empty.Request, response: Empty.Response):
+
+        # Update the target trajectory with the `home` position joint angles as the last point in the trajectory
+        path: Path = self._make_trajectory(np.array(self._panda.reset_model()))
+
+        end_effector_target: Odometry = Odometry()
+        end_effector_target.header = path.header
+        end_effector_target.child_frame_id = self._panda.end_effector_frame
+        end_effector_target.pose.pose = path.poses[-1].pose
+
+        # Publish markers in RViz for trajectory and for final pose
+        self._publish_to_rviz(path, end_effector_target)
+
+        return response
+
+    def go_to_target_real_world(self, request: Empty.Request, response: Empty.Response):
+
+        # Publish the final joint target and the joint trajectory
+        self._idyn_joint_trajectory_pub.publish(self._current_target_joint_trajectory)
+        self._idyn_joint_group_position_controller_pub.publish(self._current_target_joint_setpoint)
+
+        # Publish the final trajectory point to the control topic
+        self._joint_control_pub.publish(self._current_target_joint_setpoint)
+
+        return response
+
+    def go_to_target_sim(self, request: Empty.Request, response: Empty.Response):
+
+        # Publish the final joint target and the joint trajectory
+        self._idyn_joint_trajectory_pub.publish(self._current_target_joint_trajectory)
+        self._idyn_joint_group_position_controller_pub.publish(self._current_target_joint_setpoint)
+
+        # Visualize the trajectory
+        for point in self._current_target_joint_trajectory.points:
+            self._current_joint_positions = point.positions
+
+            joint_states_msg: JointState = JointState()
+            joint_states_msg.header.stamp = self.get_clock().now().to_msg()
+            joint_states_msg.header.frame_id = self._panda.base_frame
+            joint_states_msg.name = self._panda.joint_names
+            joint_states_msg.position = list(point.positions)
+            joint_states_msg.velocity = [0.] * self._panda.num_joints
+            joint_states_msg.effort = [0.] * self._panda.num_joints
+            
+            self._joint_states_publisher.publish(joint_states_msg)
+
+        return response
+
+    def callback_joint_states(self, joint_states: JointState):
+        
+        # Update the joint positions
+        self._current_joint_positions = np.array(joint_states.position)
+        self._panda.set_joint_states(joint_states)
+
+    def actuate_gripper(self, request: Empty.Request, response: Empty.Response):
+
+        # actuate the fingers - if OPEN, CLOSE them; otherwise OPEN them
+        if self._panda.gripper_state == FingersAction.OPEN:
+            self._current_target_joint_setpoint.data = self._panda.move_fingers(self._current_target_joint_setpoint.data, FingersAction.CLOSE)
+        else:
+            self._current_target_joint_setpoint.data = self._panda.move_fingers(self._current_target_joint_setpoint.data, FingersAction.OPEN)
+
+    def get_joint_targets_plan(self, request: GetJointTrajectory.Request, response: GetJointTrajectory.Response) -> GetJointTrajectory.Response:
+
+        # Use IK to get the desired joint positions at the target end effector pose
+        end_effector_target: Odometry = Odometry()
+        end_effector_target.pose.pose.position.x = request.x
+        end_effector_target.pose.pose.position.y = request.y
+        end_effector_target.pose.pose.position.z = request.z
+        end_effector_target_quat_xyzw = rpy2quat([request.roll, request.pitch, request.yaw], input_in_degrees=True)
+        end_effector_target.pose.pose.orientation.w = end_effector_target_quat_xyzw.w
+        end_effector_target.pose.pose.orientation.x = end_effector_target_quat_xyzw.x
+        end_effector_target.pose.pose.orientation.y = end_effector_target_quat_xyzw.y
+        end_effector_target.pose.pose.orientation.z = end_effector_target_quat_xyzw.z
+        
+        target_joint_positions: np.ndarray = self._panda.solve_ik(end_effector_target)
+
+        # Calculate the joint angle trajectory and return a the end effector trajectory as a nav_msgs/Path message
+        path: Path = self._make_trajectory(target_joint_positions)
+
+        # Publish markers for the path and for the end effector target pose in RViz
+        self._publish_to_rviz(path, end_effector_target)
 
         return response

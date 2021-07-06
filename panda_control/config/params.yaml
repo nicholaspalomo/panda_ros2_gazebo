@@ -1,7 +1,7 @@
 panda:
   ros__parameters:
-    control_dt: 1000.0 # Hz
-    max_joint_speed: 0.1 # rad/s
+    control_dt: 0.001 # 1000 Hz
+    max_joint_speed: 0.5 # rad/s
     joint_controller_name: 'joint_group_position_controller'
     joint_control_topic: 'joint_group_position_controller/commands'
     joint_trajectory_topic: 'joint_trajectory_controller/commands'

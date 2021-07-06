@@ -22,14 +22,19 @@ def main(args=None):
 
     if "follow" in sys.argv[2]:
         node = PandaFollowTrajectory()
+        node.get_logger().info("RUNNING THE follow DEMO.")
     elif "picknplace" in sys.argv[2]:
         node = PandaPickAndPlace()
+        node.get_logger().info("RUNNING THE picknplace DEMO.")
     elif "pickninsert" in sys.argv[2]:
         node = PandaPickAndInsert()
+        node.get_logger().info("RUNNING THE pickninsert DEMO.")
     elif "teleop" in sys.argv[2]:
         node = PandaTeleopControl()
+        node.get_logger().info("RUNNING THE teleop DEMO.")
     elif "cl_setpoint" in sys.argv[2]:
         node = PandaTeleopControl2()
+        node.get_logger().info("RUNNING THE cl_setpoint DEMO.")
     else:
         raise ValueError("[runner.py] Error: Unrecognized arguments passed to node in call to `ros2 launch panda_ros2_gazebo bringup.launch.py mode:=<option>`. Valid options for <option> are `follow`, `picknplace`, `pickninsert`, `teleop`, or `cl_setpoint`")
 
