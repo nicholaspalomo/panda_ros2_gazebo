@@ -59,8 +59,8 @@ class PandaTeleopControl2(Node):
         print("THE MAXIMUM JOINT SPEED IS: {}".format(self.get_parameter('max_joint_speed').value))
 
         self._set_ee_target_srv: Service = self.create_service(GetJointTrajectory, 'set_ee_target', self.get_joint_targets_plan) # Example call: `ros2 service call /set_ee_target panda_msgs/srv/GetJointTrajectory "{x: 0.5, y: 0.5, z: 0.5, roll: 0.0, pitch: 90.0, yaw: 0.0}"`
-        self._actuate_gripper_srv: Service = self.create_service(Empty, 'actuate_gripper', self.actuate_gripper)
         self._go_to_home_srv: Service = self.create_service(Empty, '/go2home', self.go_to_home)
+        self._actuate_gripper_srv: Service = self.create_service(Empty, 'actuate_gripper', self.actuate_gripper)
 
         # Create service clients for simulation...
         self._go_to_target_sim_srv: Service = self.create_service(Empty, '/go2target/sim', self.go_to_target_sim)
@@ -74,6 +74,7 @@ class PandaTeleopControl2(Node):
         self._joint_trajectory_point: JointTrajectoryPoint = JointTrajectoryPoint()
         self._current_target_joint_trajectory: JointTrajectory = JointTrajectory()
         self._current_target_joint_setpoint: Float64MultiArray = Float64MultiArray()
+        self._current_target_joint_setpoint.data = list(self._current_joint_positions)
 
         #  Subscribe to the joint states
         self._joint_states_subscriber: Subscription = self.create_subscription(JointState, '/joint_states', self.callback_joint_states, 10)
@@ -237,9 +238,17 @@ class PandaTeleopControl2(Node):
 
         # actuate the fingers - if OPEN, CLOSE them; otherwise OPEN them
         if self._panda.gripper_state == FingersAction.OPEN:
-            self._current_target_joint_setpoint.data = self._panda.move_fingers(self._current_target_joint_setpoint.data, FingersAction.CLOSE)
+            self._current_joint_positions = np.array(self._panda.move_fingers(list(self._current_joint_positions), FingersAction.CLOSE))
         else:
-            self._current_target_joint_setpoint.data = self._panda.move_fingers(self._current_target_joint_setpoint.data, FingersAction.OPEN)
+            self._current_joint_positions = np.array(self._panda.move_fingers(list(self._current_joint_positions), FingersAction.OPEN))
+
+        for point in self._current_target_joint_trajectory.points:
+            point.positions[-2] = self._current_joint_positions[-2]
+            point.positions[-1] = self._current_joint_positions[-1]
+
+        self._current_target_joint_setpoint.data = self._current_target_joint_trajectory.points[-1].positions
+        
+        return response
 
     def get_joint_targets_plan(self, request: GetJointTrajectory.Request, response: GetJointTrajectory.Response) -> GetJointTrajectory.Response:
 
@@ -255,6 +264,7 @@ class PandaTeleopControl2(Node):
         end_effector_target.pose.pose.orientation.z = end_effector_target_quat_xyzw.z
         
         target_joint_positions: np.ndarray = self._panda.solve_ik(end_effector_target)
+        target_joint_positions: np.ndarray = np.array(self._panda.move_fingers(list(target_joint_positions), self._panda.gripper_state))
 
         # Calculate the joint angle trajectory and return a the end effector trajectory as a nav_msgs/Path message
         path: Path = self._make_trajectory(target_joint_positions)
