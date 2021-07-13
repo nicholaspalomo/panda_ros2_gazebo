@@ -44,14 +44,14 @@ $ source install/setup.bash
 
 Launch the simulation:
 ```
-$ ros2 launch panda_ros2_gazebo gazebo.launch.py
+$ ros2 launch panda_control gazebo.launch.py
 ```
 
 This will bring up the Gazebo simulation and the RViz visualization. It will also spawn the joint controllers. Note: The robot will just be laying on the floor at the moment since the joint controllers have not actually received any setpoint yet!
 
 To launch the node that will compute the inverse kinematics and publish the setpoints to the joint controllers, open a new terminal and navigate to the root of your colcon workspace. After sourcing your workspace, launch the node with:
 ```
-$ ros2 launch panda_ros2_gazebo bringup.launch.py mode:=<demo>
+$ ros2 launch panda_control bringup.launch.py mode:=<demo>
 ```
 where `<demo>` is the name of the demo you wish to run. Note that at the moment there are three demos available:
 
@@ -73,24 +73,27 @@ and following the instructions that appear in the terminal.
 ## Repository Structure
 
 ```bash
-├── config                      # YAML configuration files
-├── description                 # Panda description and world files
-    ├── models                  # Robot URDFs and meshes
-        └── panda               # Panda URDF and meshes
-            └── meshes          # Panda meshes
-                ├── collision   # Collision meshes
-                └── visual      # Visual meshes
-    └── worlds                  # Panda world definitions
-├── launch                      # ROS launch scripts
-├── panda_ros2_gazebo           # Node definition and IK scripts
-    └── examples                # Example nodes to run
-        ├── scripts             # IK scripts
-            ├── model           # Panda forward/inverse kinematic model
-            └── rbd             # Rigid body dynamics utility scripts and class definitions
-                └── idyntree    # Python interface for iDyntree bindings
-        └── helpers             # Helper scripts for the examples
-├── resource                    # Resource directory for ROS2
-└── rviz                        # RViz configuration
+├── panda_msgs                      # Custom messages needed for the code in this repo
+    └── srv                         # Service definitions for which headers are generated
+└── panda_control                   # Primary package containing Panda ROS2 demos
+    ├── config                      # YAML configuration files
+    ├── description                 # Panda description and world files
+        ├── models                  # Robot URDFs and meshes
+            └── panda               # Panda URDF and meshes
+                └── meshes          # Panda meshes
+                    ├── collision   # Collision meshes
+                    └── visual      # Visual meshes
+        └── worlds                  # Panda world definitions
+    ├── launch                      # ROS launch scripts
+    ├── panda_control               # Node definition and IK scripts
+        └── examples                # Example nodes to run
+            ├── scripts             # IK scripts
+                ├── model           # Panda forward/inverse kinematic model
+                └── rbd             # Rigid body dynamics utility scripts and class definitions
+                    └── idyntree    # Python interface for iDyntree bindings
+            └── helpers             # Helper scripts for the examples
+    ├── resource                    # Resource directory for ROS2
+    └── rviz                        # RViz configuration
 ```
 
 ## Contributing
