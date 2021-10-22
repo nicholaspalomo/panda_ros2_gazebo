@@ -11,6 +11,25 @@ First, please ensure that your system meets the basic requirements to build and 
 - Ubuntu 20.04 LTS
 - ROS2 Foxy
 
+### Docker
+
+Check out the docker directory if you want to try out this project without installing all the dependencies on your system!
+
+```
+$ mkdir -p ~/colcon_ws/src
+$ cd ~/colcon_ws/src
+$ git clone https://github.com/nicholaspalomo/panda_ros2_gazebo.git
+$ cd panda_ros2_gazebo/docker
+$ docker build -t panda_ros2_gazebo .
+$ cd ~/colcon_ws/
+$ colcon build --merge-install --cmake-args -DIDYNTREE_USES_PYTHON
+$ ./src/panda_ros2_gazebo/docker/run.bash panda_ros2_gazebo <demo>
+```
+
+See below for a list of valid values to pass for the `<demo>` argument.
+
+### iDynTree
+
 This project depends [iDynTree](https://github.com/robotology/idyntree) library from the Italian Institute of Technology. For Debian/Ubuntu, first install the required and optional dependencies:
 
 ```
