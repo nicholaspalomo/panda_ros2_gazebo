@@ -2,7 +2,7 @@ repositories:
   ros-controls/ros2_control:
     type: git
     url: https://github.com/ros-controls/ros2_control.git
-    version: master
+    version: foxy
   control_msgs:
     type: git
     url: https://github.com/ros-controls/control_msgs.git
@@ -18,7 +18,7 @@ repositories:
   gazebo_ros2_control:
     type: git
     url: https://github.com/ros-simulation/gazebo_ros2_control.git
-    version: master
+    version: foxy
   ros-controls/ros2_controllers:
     type: git
     url: https://github.com/ros-controls/ros2_controllers
