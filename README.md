@@ -51,7 +51,7 @@ $ vcs import < panda_ros2_gazebo/workspace.repos
 Now you can proceed to build the code:
 ```
 $ cd ..
-$ colcon build --merge-install --cmake-args -DIDYNTREE_USES_PYTHON
+$ colcon build --merge-install --cmake-args -DIDYNTREE_USES_PYTHON=True -DIDYNTREE_USES_IPOPT:BOOL=ON -DCMAKE_BUILD_TYPE=Release
 ```
 
 As a sidenote, I couldn't figure out how to properly use the [ament environment hooks in a Python ROS2 package](https://docs.ros.org/en/foxy/Concepts/About-Build-System.html#the-ament-package-package) to [append the install location of the iDynTree libraries in the colcon workspace to the `PYTHONPATH` environment variable](https://github.com/robotology/idyntree#python). If you can figure out how to do this, other than the hacky workaround I added in `panda_ros2_gazebo/panda_ros2_gazebo/examples/scripts/rbd/idyntree/__init__.py`, please open a pull request and propose a solution - I'd be very grateful! 
