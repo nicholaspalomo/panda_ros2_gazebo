@@ -33,6 +33,8 @@ RUN apt-get update && \
         build-essential \
         gnupg2 \
         lsb-release \
+        xterm \
+        swig \
         python3-pip \
         python3-wheel \
         python${PYTHON3_VERSION} \

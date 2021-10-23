@@ -5,7 +5,7 @@ cd ${WORKSPACE_DIR}
 
 source /opt/ros/${ROS2_DISTRO}/setup.bash
 
-MAKEFLAGS="-j1" colcon build --merge-install --parallel-workers 1 --cmake-args -DIDYNTREE_USES_PYTHON=True -DIDYNTREE_USES_IPOPT:BOOL=ON -DCMAKE_BUILD_TYPE=Release
+MAKEFLAGS="-j1" colcon build --merge-install --executor sequential --cmake-args -DIDYNTREE_USES_PYTHON=True -DIDYNTREE_USES_IPOPT:BOOL=ON -DCMAKE_BUILD_TYPE=Release
 
 source install/setup.bash
 

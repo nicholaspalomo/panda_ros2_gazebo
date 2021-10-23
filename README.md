@@ -22,7 +22,6 @@ $ git clone https://github.com/nicholaspalomo/panda_ros2_gazebo.git
 $ cd panda_ros2_gazebo/docker
 $ docker build -t panda_ros2_gazebo .
 $ cd ~/colcon_ws/
-$ colcon build --merge-install --cmake-args -DIDYNTREE_USES_PYTHON
 $ ./src/panda_ros2_gazebo/docker/run.bash panda_ros2_gazebo <demo>
 ```
 
