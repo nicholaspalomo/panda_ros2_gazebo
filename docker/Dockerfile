@@ -56,9 +56,12 @@ RUN curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | apt
         ros-${ROS2_DISTRO}-gazebo-ros \
         ros-${ROS2_DISTRO}-control-toolbox \
         ros-${ROS2_DISTRO}-gazebo-ros-pkgs \
-        ros-${ROS2_DISTRO}-test-msgs && \
+        ros-${ROS2_DISTRO}-test-msgs \
+        ros-${ROS2_DISTRO}-rviz2 \
+        ros-${ROS2_DISTRO}-joint-state-publisher && \
     pip3 --default-timeout=100 install \
-        argcomplete && \
+        argcomplete \
+        scipy && \
     rm -rf /var/lib/apt/lists/*
 
 ### Set the paths for the project
@@ -87,11 +90,6 @@ RUN mkdir -p ${DEPS_DIR} && \
         qml-module-qtquick-controls \
         qml-module-qt-labs-folderlistmodel \
         qml-module-qt-labs-settings && \
-    git clone https://github.com/robotology/idyntree.git && \
-    mkdir -p ${DEPS_DIR}/idyntree/build && \
-    cd ${DEPS_DIR}/idyntree/build && \
-    cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS:BOOL=OFF -DIDYNTREE_USES_PYTHON=False -DIDYNTREE_USES_IPOPT:BOOL=ON && \
-    cmake --build . --target install -- -j2 && \
     rm -rf /var/lib/apt/lists/*
     # TODO: Should IDYNTREE_USES_PYTHON be True? Should BUILD_SHARED_LIBS be True?
 
