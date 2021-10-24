@@ -22,10 +22,13 @@ $ git clone https://github.com/nicholaspalomo/panda_ros2_gazebo.git
 $ cd panda_ros2_gazebo/docker
 $ docker build -t panda_ros2_gazebo .
 $ cd ~/colcon_ws/
+$ ./src/panda_ros2_gazebo/docker/run.bash panda_ros2_gazebo build
 $ ./src/panda_ros2_gazebo/docker/run.bash panda_ros2_gazebo <demo>
 ```
 
-See below for a list of valid values to pass for the `<demo>` argument.
+See below for a list of valid values to pass for the `<demo>` argument. Check out the `entrypoint.bash` to see how the demos are launched. 
+
+** At the moment, the `gzclient` hangs when launching the simulation from `run.bash`. Issue: [#9](https://github.com/nicholaspalomo/panda_ros2_gazebo/issues/9) ** 
 
 ### iDynTree
 
@@ -75,6 +78,8 @@ To launch the node that will compute the inverse kinematics and publish the setp
 $ ros2 launch panda_ros2_gazebo bringup.launch.py mode:=<demo>
 ```
 where `<demo>` is the name of the demo you wish to run. Note that at the moment there are three demos available:
+
+** NOTE: At the moment, the `picknplace` and `pickninsert` demos are broken. Only the `follow` and `teleop` demos are working as intended. Issue: [#8](https://github.com/nicholaspalomo/panda_ros2_gazebo/issues/8) **
 
 - `follow` - the Panda will just follow a circular trajectory, 
 - `picknplace` - the Panda will pick up cubes that are spawned at random locations in its workspace and attempt to stack them one on top of the other,
