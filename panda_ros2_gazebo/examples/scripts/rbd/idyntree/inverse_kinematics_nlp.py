@@ -99,6 +99,10 @@ class InverseKinematicsNLP:
         self._considered_joints: List[str] = considered_joints
         self._joint_serialization: List[str] = joint_serialization
 
+        self._prev_ik_soln: IKSolution = IKSolution(base_position=np.array([0.0, 0.0, 0.0]),
+                          base_quaternion=np.array([1.0, 0.0, 0.0, 0.0]),
+                          joint_configuration=np.zeros((len(joint_serialization),)))
+
     # ======================
     # INITIALIZATION METHODS
     # ======================
@@ -457,7 +461,11 @@ class InverseKinematicsNLP:
     def solve(self) -> None:
 
         if not self._ik.solve():
-            raise RuntimeError("Failed to solve IK")
+            print("Failed to solve IK")
+            self._failed_to_solve_ik = True
+            # raise RuntimeError("Failed to solve IK")
+        else:
+            self._failed_to_solve_ik = False
 
         # Initialize next solver call
         self._warm_start_with_last_solution()
@@ -554,16 +562,20 @@ class InverseKinematicsNLP:
         assert len(joint_positions) == len(self._considered_joints)
 
         # Get the solution
-        self._ik.getReducedSolution(base_transform, joint_positions)
+        if not self._failed_to_solve_ik:
+            self._ik.getReducedSolution(base_transform, joint_positions)
 
-        # Convert to numpy objects
-        joint_positions = joint_positions.toNumPy()
-        base_position = base_transform.getPosition().toNumPy()
-        base_quaternion = base_transform.getRotation().asQuaternion().toNumPy()
+            # Convert to numpy objects
+            joint_positions = joint_positions.toNumPy()
 
-        return IKSolution(base_position=base_position,
+            base_position = base_transform.getPosition().toNumPy()
+            base_quaternion = base_transform.getRotation().asQuaternion().toNumPy()
+
+            self._prev_ik_soln = IKSolution(base_position=base_position,
                           base_quaternion=base_quaternion,
                           joint_configuration=joint_positions)
+
+        return self._prev_ik_soln
 
     # ===============
     # PRIVATE METHODS

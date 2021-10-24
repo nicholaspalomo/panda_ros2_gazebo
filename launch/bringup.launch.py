@@ -30,7 +30,7 @@ def generate_launch_description():
     return launch.LaunchDescription([
         launch.actions.DeclareLaunchArgument(
             'mode',
-            default_value='',
+            default_value='follow',
             description='Name of demo to run - see runner.py for options'),
         panda_node
     ])

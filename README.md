@@ -11,6 +11,24 @@ First, please ensure that your system meets the basic requirements to build and 
 - Ubuntu 20.04 LTS
 - ROS2 Foxy
 
+### Docker
+
+Check out the docker directory if you want to try out this project without installing all the dependencies on your system!
+
+```
+$ mkdir -p ~/colcon_ws/src
+$ cd ~/colcon_ws/src
+$ git clone https://github.com/nicholaspalomo/panda_ros2_gazebo.git
+$ cd panda_ros2_gazebo/docker
+$ docker build -t panda_ros2_gazebo .
+$ cd ~/colcon_ws/
+$ ./src/panda_ros2_gazebo/docker/run.bash panda_ros2_gazebo <demo>
+```
+
+See below for a list of valid values to pass for the `<demo>` argument.
+
+### iDynTree
+
 This project depends [iDynTree](https://github.com/robotology/idyntree) library from the Italian Institute of Technology. For Debian/Ubuntu, first install the required and optional dependencies:
 
 ```
@@ -33,8 +51,11 @@ $ vcs import < panda_ros2_gazebo/workspace.repos
 Now you can proceed to build the code:
 ```
 $ cd ..
-$ colcon build --merge-install
+$ colcon build --merge-install --cmake-args -DIDYNTREE_USES_PYTHON=True -DIDYNTREE_USES_IPOPT:BOOL=ON -DCMAKE_BUILD_TYPE=Release
 ```
+
+As a sidenote, I couldn't figure out how to properly use the [ament environment hooks in a Python ROS2 package](https://docs.ros.org/en/foxy/Concepts/About-Build-System.html#the-ament-package-package) to [append the install location of the iDynTree libraries in the colcon workspace to the `PYTHONPATH` environment variable](https://github.com/robotology/idyntree#python). If you can figure out how to do this, other than the hacky workaround I added in `panda_ros2_gazebo/panda_ros2_gazebo/examples/scripts/rbd/idyntree/__init__.py`, please open a pull request and propose a solution - I'd be very grateful! 
+
 ## Running the Examples
 
 After the build process has completed, source your colcon workspace:

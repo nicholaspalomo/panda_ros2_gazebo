@@ -13,15 +13,15 @@ controller_manager:
 /joint_group_position_controller:
   ros__parameters:
     joints:
-        - panda_joint1
-        - panda_joint2
-        - panda_joint3
-        - panda_joint4
-        - panda_joint5
-        - panda_joint6
-        - panda_joint7
-        - panda_finger_joint1
-        - panda_finger_joint2
+      - panda_joint1
+      - panda_joint2
+      - panda_joint3
+      - panda_joint4
+      - panda_joint5
+      - panda_joint6
+      - panda_joint7
+      - panda_finger_joint1
+      - panda_finger_joint2
 
     gains:
       panda_joint1:         {p: 50., i: 0., d: 20.}
@@ -33,5 +33,3 @@ controller_manager:
       panda_joint7:         {p: 10., i: 0.5, d: 0.1}
       panda_finger_joint1:  {p: 800., i: 0., d: 50.}
       panda_finger_joint2:  {p: 800., i: 0., d: 50.}
-
-    interface_name: effort

@@ -57,4 +57,9 @@ Panda demo in ROS2.""",
                 panda_ros2_gazebo.runner:main",
         ],
     },
+    package_data={
+        package_name: [
+            'hook/*',
+        ],
+    },
 )
